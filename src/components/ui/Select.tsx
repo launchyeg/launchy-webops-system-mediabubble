@@ -29,7 +29,9 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
             className={cn(
               "h-10 w-full appearance-none rounded-lg border border-slate-300 bg-white px-3 pr-9 text-sm text-slate-900 transition-colors",
               "focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20",
+              "disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500",
               "dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100",
+              "dark:disabled:border-slate-800 dark:disabled:bg-slate-800/60 dark:disabled:text-slate-500",
               error && "border-red-400 focus:border-red-500 focus:ring-red-500/20",
               className
             )}

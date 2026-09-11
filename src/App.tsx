@@ -9,6 +9,7 @@ import ClientDetailsPage from "@/pages/ClientDetailsPage";
 import DomainsPage from "@/pages/DomainsPage";
 import HostingPage from "@/pages/HostingPage";
 import EmailsPage from "@/pages/EmailsPage";
+import SharedHostingPage from "@/pages/SharedHostingPage";
 import NotFoundPage from "@/pages/NotFoundPage";
 
 function Protected({
@@ -90,6 +91,17 @@ export default function App() {
         element={
           <Protected title="Email" description="Email accounts & renewals">
             <EmailsPage />
+          </Protected>
+        }
+      />
+      <Route
+        path="/shared-hosting"
+        element={
+          <Protected
+            title="Shared Hosting"
+            description="Shared hosting plans & servers"
+          >
+            <SharedHostingPage />
           </Protected>
         }
       />

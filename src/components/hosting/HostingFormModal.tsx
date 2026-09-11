@@ -19,8 +19,10 @@ import { getRenewalInfo, renewalTierToServiceStatus } from "@/utils/dates";
 import { HOSTING_PROVIDERS } from "@/utils/constants";
 import { useUsdToEgpRate } from "@/hooks/useUsdToEgpRate";
 import { useDomains } from "@/hooks/useDomains";
+import { useSharedHosting } from "@/hooks/useSharedHosting";
 import { formatCurrency, formatEgp } from "@/utils/format";
-import type { ClientRow, HostingWithClient } from "@/types";
+import { cn } from "@/lib/utils";
+import type { ClientRow, HostingWithClient, HostType } from "@/types";
 
 interface HostingFormModalProps {
   open: boolean;
@@ -32,7 +34,9 @@ interface HostingFormModalProps {
 }
 
 const EMPTY_FORM = {
+  host_type: "private" as HostType,
   account_name: "",
+  shared_hosting_id: "",
   provider: "",
   expiration_date: "",
   auto_renewal: false,
@@ -58,6 +62,7 @@ export function HostingFormModal({
   const isEdit = Boolean(hosting);
   const { rate: egpRate } = useUsdToEgpRate();
   const { domains } = useDomains();
+  const { sharedHosting } = useSharedHosting();
 
   const clientDomains = useMemo(
     () => domains.filter((d) => d.client_id === form.client_id),
@@ -73,7 +78,9 @@ export function HostingFormModal({
     setForm(
       hosting
         ? {
+            host_type: hosting.host_type,
             account_name: hosting.account_name,
+            shared_hosting_id: hosting.shared_hosting_id ?? "",
             provider: hosting.provider,
             expiration_date: hosting.expiration_date,
             auto_renewal: hosting.auto_renewal,
@@ -105,6 +112,23 @@ export function HostingFormModal({
     // belonged to the old client).
     setForm((f) => ({ ...f, client_id: clientId, domain_ids: [] }));
 
+  // A shared host's Provider and Account Email aren't typed manually — they
+  // mirror the selected shared_hosting plan and become read-only.
+  const sharedHostFields = (planId: string) => {
+    const plan = sharedHosting.find((s) => s.id === planId);
+    return { provider: plan?.provider ?? "", account_email: plan?.account_email ?? "" };
+  };
+
+  const handleHostTypeChange = (hostType: HostType) =>
+    setForm((f) => ({
+      ...f,
+      host_type: hostType,
+      ...(hostType === "shared" ? sharedHostFields(f.shared_hosting_id) : {}),
+    }));
+
+  const handleSharedHostChange = (planId: string) =>
+    setForm((f) => ({ ...f, shared_hosting_id: planId, ...sharedHostFields(planId) }));
+
   const addDomainRow = () => setForm((f) => ({ ...f, domain_ids: [...f.domain_ids, ""] }));
 
   const updateDomainRow = (index: number, domainId: string) =>
@@ -122,11 +146,25 @@ export function HostingFormModal({
       toast({ title: "Please select a client", variant: "error" });
       return;
     }
+    const selectedSharedHost =
+      form.host_type === "shared"
+        ? sharedHosting.find((s) => s.id === form.shared_hosting_id)
+        : null;
+    if (form.host_type === "shared" && !selectedSharedHost) {
+      toast({ title: "Please select a shared host", variant: "error" });
+      return;
+    }
     setSubmitting(true);
     try {
       const tier = getRenewalInfo(form.expiration_date).tier;
       const payload = {
-        account_name: form.account_name.trim(),
+        host_type: form.host_type,
+        // A shared host's name is a snapshot of the linked plan's name at
+        // save time, not a live join — kept in sync with everywhere
+        // account_name is already displayed as this row's title.
+        account_name:
+          form.host_type === "shared" ? selectedSharedHost!.name : form.account_name.trim(),
+        shared_hosting_id: form.host_type === "shared" ? form.shared_hosting_id : null,
         provider: form.provider.trim(),
         expiration_date: form.expiration_date,
         auto_renewal: form.auto_renewal,
@@ -172,13 +210,69 @@ export function HostingFormModal({
       }
     >
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <Input
-          label="Hosting Account Name / Identifier"
-          required
-          placeholder="e.g. client-site-prod"
-          value={form.account_name}
-          onChange={(e) => setForm((f) => ({ ...f, account_name: e.target.value }))}
-        />
+        <div className="flex flex-col gap-1.5">
+          <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+            Host Type
+          </label>
+          <div className="inline-flex w-fit rounded-lg border border-slate-300 p-0.5 dark:border-slate-700">
+            <button
+              type="button"
+              onClick={() => handleHostTypeChange("private")}
+              className={cn(
+                "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+                form.host_type === "private"
+                  ? "bg-brand-600 text-white"
+                  : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
+              )}
+            >
+              Private Host
+            </button>
+            <button
+              type="button"
+              onClick={() => handleHostTypeChange("shared")}
+              className={cn(
+                "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+                form.host_type === "shared"
+                  ? "bg-brand-600 text-white"
+                  : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
+              )}
+            >
+              Shared Host
+            </button>
+          </div>
+        </div>
+
+        {form.host_type === "private" ? (
+          <Input
+            label="Hosting Account Name / Identifier"
+            required
+            placeholder="e.g. client-site-prod"
+            value={form.account_name}
+            onChange={(e) => setForm((f) => ({ ...f, account_name: e.target.value }))}
+          />
+        ) : (
+          <Select
+            label="Shared Host"
+            required
+            value={form.shared_hosting_id}
+            onChange={(e) => handleSharedHostChange(e.target.value)}
+            hint={
+              sharedHosting.length === 0
+                ? "No shared hosting plans exist yet — add one on the Shared Hosting page first."
+                : undefined
+            }
+          >
+            <option value="" disabled>
+              Select a shared host…
+            </option>
+            {sharedHosting.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </Select>
+        )}
+
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <ProviderSelect
             presets={HOSTING_PROVIDERS}
@@ -186,6 +280,8 @@ export function HostingFormModal({
             onChange={(v) => setForm((f) => ({ ...f, provider: v }))}
             label="Hosting Provider"
             required
+            disabled={form.host_type === "shared"}
+            hint={form.host_type === "shared" ? "Set by the selected shared host." : undefined}
           />
           <ClientSelect
             clients={clients}
@@ -196,21 +292,32 @@ export function HostingFormModal({
           />
         </div>
 
+        <Input
+          label="Hosting Account Email"
+          type="email"
+          value={form.account_email}
+          disabled={form.host_type === "shared"}
+          hint={form.host_type === "shared" ? "Set by the selected shared host." : undefined}
+          onChange={(e) => setForm((f) => ({ ...f, account_email: e.target.value }))}
+        />
+
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between">
             <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
               Domains
             </p>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              disabled={!form.client_id}
-              onClick={addDomainRow}
-            >
-              <Plus className="h-4 w-4" />
-              Add Domain
-            </Button>
+            {form.host_type === "private" && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={!form.client_id}
+                onClick={addDomainRow}
+              >
+                <Plus className="h-4 w-4" />
+                Add Domain
+              </Button>
+            )}
           </div>
           {form.domain_ids.length === 0 ? (
             <p className="text-xs text-slate-400">
@@ -241,15 +348,17 @@ export function HostingFormModal({
                       ))}
                     </Select>
                   </div>
-                  <Button
-                    type="button"
-                    size="icon"
-                    variant="ghost"
-                    aria-label="Remove domain"
-                    onClick={() => removeDomainRow(index)}
-                  >
-                    <Trash2 className="h-4 w-4 text-red-500" />
-                  </Button>
+                  {form.host_type === "private" && (
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      aria-label="Remove domain"
+                      onClick={() => removeDomainRow(index)}
+                    >
+                      <Trash2 className="h-4 w-4 text-red-500" />
+                    </Button>
+                  )}
                 </div>
               );
             })
@@ -310,12 +419,6 @@ export function HostingFormModal({
             </dl>
           )}
         </div>
-        <Input
-          label="Hosting Account Email"
-          type="email"
-          value={form.account_email}
-          onChange={(e) => setForm((f) => ({ ...f, account_email: e.target.value }))}
-        />
         <Switch
           id="hosting-auto-renewal"
           checked={form.auto_renewal}

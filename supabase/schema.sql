@@ -229,6 +229,61 @@ create index if not exists emails_expiration_date_idx on emails (expiration_date
 create index if not exists emails_status_idx on emails (status);
 
 -- ============================================================================
+-- shared_hosting
+-- A top-level entity for tracking shared hosting plans/servers as
+-- infrastructure in their own right — unlike domains/hosting/emails, these
+-- aren't tied to a client (no client_id), matching the "Shared Hosting"
+-- page's own Add/table view.
+-- ============================================================================
+create table if not exists shared_hosting (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  provider text not null,
+  status text not null default 'active' check (status in ('active', 'expiring_soon', 'expired')),
+  expiration_date date not null,
+  auto_renewal boolean not null default false,
+  annual_cost numeric(10, 2) not null default 0,
+  -- The login/admin email for this shared server. Once a hosting account
+  -- links to this plan, its own Hosting Provider and Hosting Account Email
+  -- fields are auto-filled from this and `provider`, and become
+  -- non-editable.
+  account_email text,
+  notes text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+drop trigger if exists shared_hosting_set_updated_at on shared_hosting;
+create trigger shared_hosting_set_updated_at
+  before update on shared_hosting
+  for each row execute procedure set_updated_at();
+
+create index if not exists shared_hosting_expiration_date_idx on shared_hosting (expiration_date);
+create index if not exists shared_hosting_status_idx on shared_hosting (status);
+
+-- Links a `hosting` row to a shared_hosting plan instead of (or alongside)
+-- its free-text account_name — added here, after shared_hosting exists,
+-- since it's referenced by FK. A "private" host keeps the typed
+-- Name/Identifier as account_name; a "shared" host links via
+-- shared_hosting_id, and account_name is auto-set to a snapshot of the
+-- linked plan's name at save time so every existing view/table keeps
+-- working unchanged.
+alter table if exists hosting
+  add column if not exists host_type text not null default 'private'
+    check (host_type in ('private', 'shared'));
+
+alter table if exists hosting
+  add column if not exists shared_hosting_id uuid references shared_hosting (id) on delete set null;
+
+create index if not exists hosting_shared_hosting_id_idx on hosting (shared_hosting_id);
+
+alter table if exists hosting
+  drop constraint if exists hosting_shared_link_check;
+alter table if exists hosting
+  add constraint hosting_shared_link_check
+    check (host_type = 'private' or shared_hosting_id is not null);
+
+-- ============================================================================
 -- Row Level Security
 --
 -- Every table is readable/writable only by authenticated users. There is
@@ -241,6 +296,7 @@ alter table domains enable row level security;
 alter table hosting enable row level security;
 alter table hosting_domains enable row level security;
 alter table emails enable row level security;
+alter table shared_hosting enable row level security;
 
 drop policy if exists "Authenticated users can read clients" on clients;
 create policy "Authenticated users can read clients"
@@ -306,6 +362,19 @@ create policy "Authenticated users can update emails"
 drop policy if exists "Authenticated users can delete emails" on emails;
 create policy "Authenticated users can delete emails"
   on emails for delete using (auth.role() = 'authenticated');
+
+drop policy if exists "Authenticated users can read shared_hosting" on shared_hosting;
+create policy "Authenticated users can read shared_hosting"
+  on shared_hosting for select using (auth.role() = 'authenticated');
+drop policy if exists "Authenticated users can insert shared_hosting" on shared_hosting;
+create policy "Authenticated users can insert shared_hosting"
+  on shared_hosting for insert with check (auth.role() = 'authenticated');
+drop policy if exists "Authenticated users can update shared_hosting" on shared_hosting;
+create policy "Authenticated users can update shared_hosting"
+  on shared_hosting for update using (auth.role() = 'authenticated');
+drop policy if exists "Authenticated users can delete shared_hosting" on shared_hosting;
+create policy "Authenticated users can delete shared_hosting"
+  on shared_hosting for delete using (auth.role() = 'authenticated');
 
 -- ============================================================================
 -- Future automated renewal reminders

@@ -71,14 +71,16 @@ export function EmailFormModal({
   const { toast } = useToast();
   const [form, setForm] = useState(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
-  const [visiblePasswords, setVisiblePasswords] = useState<Set<number>>(new Set());
+  const [visiblePasswords, setVisiblePasswords] = useState<Set<number>>(
+    new Set(),
+  );
   const isEdit = Boolean(email);
   const { rate: egpRate } = useUsdToEgpRate();
   const { domains } = useDomains();
 
   const clientDomains = useMemo(
     () => domains.filter((d) => d.client_id === form.client_id),
-    [domains, form.client_id]
+    [domains, form.client_id],
   );
   const selectedDomainName =
     clientDomains.find((d) => d.id === form.domain_id)?.domain_name ?? null;
@@ -109,31 +111,43 @@ export function EmailFormModal({
 
   const handleDomainChange = (domainId: string) =>
     setForm((f) => {
-      const newDomain = clientDomains.find((d) => d.id === domainId)?.domain_name ?? null;
+      const newDomain =
+        clientDomains.find((d) => d.id === domainId)?.domain_name ?? null;
       return {
         ...f,
         domain_id: domainId,
         mailboxes: f.mailboxes.map((m) => ({
           ...m,
-          email: withDomain(localPartOf(m.email, selectedDomainName), newDomain),
+          email: withDomain(
+            localPartOf(m.email, selectedDomainName),
+            newDomain,
+          ),
         })),
       };
     });
 
   const addMailbox = () =>
-    setForm((f) => ({ ...f, mailboxes: [...f.mailboxes, { ...EMPTY_MAILBOX }] }));
+    setForm((f) => ({
+      ...f,
+      mailboxes: [...f.mailboxes, { ...EMPTY_MAILBOX }],
+    }));
 
   const updateMailbox = (index: number, patch: Partial<EmailMailbox>) =>
     setForm((f) => ({
       ...f,
-      mailboxes: f.mailboxes.map((m, i) => (i === index ? { ...m, ...patch } : m)),
+      mailboxes: f.mailboxes.map((m, i) =>
+        i === index ? { ...m, ...patch } : m,
+      ),
     }));
 
   const updateMailboxLocalPart = (index: number, localPart: string) =>
     updateMailbox(index, { email: withDomain(localPart, selectedDomainName) });
 
   const removeMailbox = (index: number) => {
-    setForm((f) => ({ ...f, mailboxes: f.mailboxes.filter((_, i) => i !== index) }));
+    setForm((f) => ({
+      ...f,
+      mailboxes: f.mailboxes.filter((_, i) => i !== index),
+    }));
     setVisiblePasswords((prev) => {
       const next = new Set<number>();
       prev.forEach((i) => {
@@ -179,7 +193,7 @@ export function EmailFormModal({
               notes: email.notes ?? "",
             };
           })()
-        : { ...EMPTY_FORM, client_id: defaultClientId ?? "" }
+        : { ...EMPTY_FORM, client_id: defaultClientId ?? "" },
     );
     setVisiblePasswords(new Set());
   }, [email, open, defaultClientId]);
@@ -208,9 +222,13 @@ export function EmailFormModal({
         // cost — the form fields themselves hold the per-mailbox rate.
         annual_cost: form.is_lifetime ? 0 : totalEmailCostUsd,
         commission_usd: form.is_lifetime ? 0 : totalCommissionUsd,
-        lifetime_cost_egp: form.is_lifetime ? Number(form.lifetime_cost_egp) || 0 : 0,
+        lifetime_cost_egp: form.is_lifetime
+          ? Number(form.lifetime_cost_egp) || 0
+          : 0,
         mailboxes: form.mailboxes
-          .filter((m) => m.email.trim() || m.password.trim() || m.storage.trim())
+          .filter(
+            (m) => m.email.trim() || m.password.trim() || m.storage.trim(),
+          )
           .map((m) => ({
             email: m.email.trim(),
             password: m.password,
@@ -245,15 +263,26 @@ export function EmailFormModal({
       open={open}
       onClose={onClose}
       title={isEdit ? "Edit Email" : "Add Email"}
-      description={isEdit ? "Update this email account's details." : "Register a new email account."}
+      description={
+        isEdit
+          ? "Update this email account's details."
+          : "Register a new email account."
+      }
     >
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4" autoComplete="off">
+      <form
+        onSubmit={handleSubmit}
+        className="flex flex-col gap-4"
+        autoComplete="off"
+      >
         <Input
-          label="Email Account / Service Name"
+          label="Service Name"
           required
-          placeholder="e.g. team@client.com"
+          hint="A name for this email service — not an address (those go in Mailboxes below)."
+          placeholder="e.g. Google Workspace — Acme Corp"
           value={form.email_account}
-          onChange={(e) => setForm((f) => ({ ...f, email_account: e.target.value }))}
+          onChange={(e) =>
+            setForm((f) => ({ ...f, email_account: e.target.value }))
+          }
         />
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <ProviderSelect
@@ -272,6 +301,16 @@ export function EmailFormModal({
           />
         </div>
 
+        <Input
+          label="Account Email"
+          type="email"
+          hint="The billing / admin login email for this service (not a mailbox)."
+          value={form.account_email}
+          onChange={(e) =>
+            setForm((f) => ({ ...f, account_email: e.target.value }))
+          }
+        />
+
         <Select
           label="Domain"
           value={form.domain_id}
@@ -282,7 +321,7 @@ export function EmailFormModal({
               ? "Select a client above first."
               : clientDomains.length === 0
                 ? "This client has no domains on file yet — mailbox emails will need to be typed in full."
-                : "Used to auto-append \"@domain\" to mailbox local parts below."
+                : 'Used to auto-append "@domain" to mailbox local parts below.'
           }
         >
           <option value="">No domain selected</option>
@@ -305,7 +344,7 @@ export function EmailFormModal({
                 "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
                 !form.is_lifetime
                   ? "bg-brand-600 text-white"
-                  : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
+                  : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100",
               )}
             >
               Expiration Date
@@ -317,7 +356,7 @@ export function EmailFormModal({
                 "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
                 form.is_lifetime
                   ? "bg-brand-600 text-white"
-                  : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
+                  : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100",
               )}
             >
               Lifetime
@@ -334,7 +373,9 @@ export function EmailFormModal({
             required
             hint="A one-time lifetime price, entered directly in Egyptian Pounds."
             value={form.lifetime_cost_egp}
-            onChange={(e) => setForm((f) => ({ ...f, lifetime_cost_egp: e.target.value }))}
+            onChange={(e) =>
+              setForm((f) => ({ ...f, lifetime_cost_egp: e.target.value }))
+            }
           />
         ) : (
           <>
@@ -356,7 +397,9 @@ export function EmailFormModal({
                 required
                 hint="Per mailbox."
                 value={form.annual_cost}
-                onChange={(e) => setForm((f) => ({ ...f, annual_cost: e.target.value }))}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, annual_cost: e.target.value }))
+                }
               />
             </div>
             <Input
@@ -366,14 +409,19 @@ export function EmailFormModal({
               step="0.01"
               hint="Your company's fee for managing one mailbox, on top of its email cost. Per mailbox, like Email Cost above."
               value={form.commission_usd}
-              onChange={(e) => setForm((f) => ({ ...f, commission_usd: e.target.value }))}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, commission_usd: e.target.value }))
+              }
             />
             <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 dark:border-slate-800 dark:bg-slate-800/50">
               <p className="text-xs font-medium text-slate-400">
                 Final Price to Client
                 <span className="ml-1 font-normal">
-                  ({formatCurrency(perMailboxEmailCostUsd + perMailboxCommissionUsd)} ×{" "}
-                  {mailboxCount} mailbox{mailboxCount === 1 ? "" : "es"})
+                  (
+                  {formatCurrency(
+                    perMailboxEmailCostUsd + perMailboxCommissionUsd,
+                  )}{" "}
+                  × {mailboxCount} mailbox{mailboxCount === 1 ? "" : "es"})
                 </span>
               </p>
               <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
@@ -400,33 +448,28 @@ export function EmailFormModal({
           </>
         )}
 
-        <Input
-          label="Account Email"
-          type="email"
-          hint="The billing / admin login email for this service."
-          value={form.account_email}
-          onChange={(e) => setForm((f) => ({ ...f, account_email: e.target.value }))}
-        />
         {!form.is_lifetime && (
           <Switch
             id="email-auto-renewal"
             checked={form.auto_renewal}
-            onChange={(checked) => setForm((f) => ({ ...f, auto_renewal: checked }))}
+            onChange={(checked) =>
+              setForm((f) => ({ ...f, auto_renewal: checked }))
+            }
             label="Auto Renewal Enabled"
           />
         )}
-        <Textarea
-          label="Notes"
-          value={form.notes}
-          onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
-        />
 
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between">
             <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
               Mailboxes
             </p>
-            <Button type="button" size="sm" variant="outline" onClick={addMailbox}>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={addMailbox}
+            >
               <Plus className="h-4 w-4" />
               Add Mailbox
             </Button>
@@ -447,7 +490,9 @@ export function EmailFormModal({
                       placeholder="sales"
                       suffix={`@${selectedDomainName}`}
                       value={localPartOf(mailbox.email, selectedDomainName)}
-                      onChange={(e) => updateMailboxLocalPart(index, e.target.value)}
+                      onChange={(e) =>
+                        updateMailboxLocalPart(index, e.target.value)
+                      }
                     />
                   ) : (
                     <Input
@@ -457,7 +502,9 @@ export function EmailFormModal({
                       autoComplete="off"
                       placeholder="user@client.com"
                       value={mailbox.email}
-                      onChange={(e) => updateMailbox(index, { email: e.target.value })}
+                      onChange={(e) =>
+                        updateMailbox(index, { email: e.target.value })
+                      }
                     />
                   )}
                 </div>
@@ -480,13 +527,19 @@ export function EmailFormModal({
                     name={`mailbox-password-${index}`}
                     autoComplete="new-password"
                     value={mailbox.password}
-                    onChange={(e) => updateMailbox(index, { password: e.target.value })}
+                    onChange={(e) =>
+                      updateMailbox(index, { password: e.target.value })
+                    }
                   />
                   <button
                     type="button"
                     onClick={() => togglePasswordVisible(index)}
                     className="absolute right-3 top-[34px] text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
-                    aria-label={visiblePasswords.has(index) ? "Hide password" : "Show password"}
+                    aria-label={
+                      visiblePasswords.has(index)
+                        ? "Hide password"
+                        : "Show password"
+                    }
                   >
                     {visiblePasswords.has(index) ? (
                       <EyeOff className="h-4 w-4" />
@@ -497,14 +550,22 @@ export function EmailFormModal({
                 </div>
                 <Input
                   label="Email Storage"
-                  placeholder="e.g. 30 GB"
+                  placeholder="e.g. 5 GB"
                   value={mailbox.storage}
-                  onChange={(e) => updateMailbox(index, { storage: e.target.value })}
+                  onChange={(e) =>
+                    updateMailbox(index, { storage: e.target.value })
+                  }
                 />
               </div>
             </div>
           ))}
         </div>
+
+        <Textarea
+          label="Notes"
+          value={form.notes}
+          onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+        />
 
         <div className="mt-2 flex justify-end gap-2">
           <Button type="button" variant="outline" onClick={onClose}>

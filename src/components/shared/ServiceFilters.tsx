@@ -12,9 +12,12 @@ interface ServiceFiltersProps {
   onSearchChange: (v: string) => void;
   searchPlaceholder: string;
 
-  clientFilter: string;
-  onClientFilterChange: (v: string) => void;
-  clients: Pick<ClientRow, "id" | "client_name">[];
+  /** Omit all three (or leave `clients` empty) to hide the client filter
+   * entirely — used by pages whose rows aren't tied to a client, like
+   * Shared Hosting. */
+  clientFilter?: string;
+  onClientFilterChange?: (v: string) => void;
+  clients?: Pick<ClientRow, "id" | "client_name">[];
 
   providerFilter: string;
   onProviderFilterChange: (v: string) => void;
@@ -36,19 +39,21 @@ export function ServiceFilters(props: ServiceFiltersProps) {
         placeholder={props.searchPlaceholder}
         className="sm:w-64"
       />
-      <Select
-        value={props.clientFilter}
-        onChange={(e) => props.onClientFilterChange(e.target.value)}
-        className="sm:w-44"
-        aria-label="Filter by client"
-      >
-        <option value="">All Clients</option>
-        {props.clients.map((c) => (
-          <option key={c.id} value={c.id}>
-            {c.client_name}
-          </option>
-        ))}
-      </Select>
+      {props.clients && props.clients.length > 0 && (
+        <Select
+          value={props.clientFilter}
+          onChange={(e) => props.onClientFilterChange?.(e.target.value)}
+          className="sm:w-44"
+          aria-label="Filter by client"
+        >
+          <option value="">All Clients</option>
+          {props.clients.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.client_name}
+            </option>
+          ))}
+        </Select>
+      )}
       <Select
         value={props.providerFilter}
         onChange={(e) => props.onProviderFilterChange(e.target.value)}

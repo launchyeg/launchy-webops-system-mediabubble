@@ -3,8 +3,9 @@ import { useClients } from "./useClients";
 import { useDomains } from "./useDomains";
 import { useHosting } from "./useHosting";
 import { useEmails } from "./useEmails";
+import { useSharedHosting } from "./useSharedHosting";
 import { getRenewalInfo } from "@/utils/dates";
-import type { UpcomingRenewal } from "@/types";
+import type { SharedHostingRow, UpcomingRenewal } from "@/types";
 
 export interface ServiceBucketStats {
   total: number;
@@ -24,9 +25,18 @@ export interface FinancialStats {
   annualDomainCost: number;
   annualHostingCost: number;
   annualEmailCost: number;
+  annualSharedHostingCost: number;
   totalAnnualCost: number;
   upcomingRenewalExpense: number; // sum of annual cost for services due within 30 days
   servicesNeedingRenewal: number; // count due within 30 days (incl. expired)
+}
+
+/** One shared hosting plan alongside which clients currently have a
+ * "Shared Host"-type hosting account linked to it — the Overview page's
+ * "Shared Hosting Usage" section is built directly from this. */
+export interface SharedHostingUsage {
+  plan: SharedHostingRow;
+  clientNames: string[];
 }
 
 export function useOverviewData() {
@@ -34,17 +44,23 @@ export function useOverviewData() {
   const domains = useDomains();
   const hosting = useHosting();
   const emails = useEmails();
+  const sharedHostingHook = useSharedHosting();
 
   const loading =
-    clients.loading || domains.loading || hosting.loading || emails.loading;
+    clients.loading ||
+    domains.loading ||
+    hosting.loading ||
+    emails.loading ||
+    sharedHostingHook.loading;
   const error =
-    clients.error || domains.error || hosting.error || emails.error;
+    clients.error || domains.error || hosting.error || emails.error || sharedHostingHook.error;
 
   const refetch = () => {
     clients.refetch();
     domains.refetch();
     hosting.refetch();
     emails.refetch();
+    sharedHostingHook.refetch();
   };
 
   const bucketStats = (
@@ -66,12 +82,17 @@ export function useOverviewData() {
   const domainStats = useMemo(() => bucketStats(domains.domains), [domains.domains]);
   const hostingStats = useMemo(() => bucketStats(hosting.hosting), [hosting.hosting]);
   const emailStats = useMemo(() => bucketStats(emails.emails), [emails.emails]);
+  const sharedHostingStats = useMemo(
+    () => bucketStats(sharedHostingHook.sharedHosting),
+    [sharedHostingHook.sharedHosting]
+  );
 
   const renewalWindowStats = useMemo<RenewalWindowStats>(() => {
     const all = [
       ...domains.domains.map((d) => d.expiration_date),
       ...hosting.hosting.map((h) => h.expiration_date),
       ...emails.emails.map((e) => e.expiration_date),
+      ...sharedHostingHook.sharedHosting.map((s) => s.expiration_date),
     ];
     const stats: RenewalWindowStats = {
       within30: 0,
@@ -92,7 +113,7 @@ export function useOverviewData() {
       }
     }
     return stats;
-  }, [domains.domains, hosting.hosting, emails.emails]);
+  }, [domains.domains, hosting.hosting, emails.emails, sharedHostingHook.sharedHosting]);
 
   const financials = useMemo<FinancialStats>(() => {
     const sum = (rows: { annual_cost: number }[]) =>
@@ -101,6 +122,7 @@ export function useOverviewData() {
     const annualDomainCost = sum(domains.domains);
     const annualHostingCost = sum(hosting.hosting);
     const annualEmailCost = sum(emails.emails);
+    const annualSharedHostingCost = sum(sharedHostingHook.sharedHosting);
 
     const allWithCost = [
       ...domains.domains.map((d) => ({
@@ -114,6 +136,10 @@ export function useOverviewData() {
       ...emails.emails.map((e) => ({
         expiration_date: e.expiration_date,
         annual_cost: e.annual_cost,
+      })),
+      ...sharedHostingHook.sharedHosting.map((s) => ({
+        expiration_date: s.expiration_date,
+        annual_cost: s.annual_cost,
       })),
     ];
 
@@ -132,11 +158,13 @@ export function useOverviewData() {
       annualDomainCost,
       annualHostingCost,
       annualEmailCost,
-      totalAnnualCost: annualDomainCost + annualHostingCost + annualEmailCost,
+      annualSharedHostingCost,
+      totalAnnualCost:
+        annualDomainCost + annualHostingCost + annualEmailCost + annualSharedHostingCost,
       upcomingRenewalExpense,
       servicesNeedingRenewal,
     };
-  }, [domains.domains, hosting.hosting, emails.emails]);
+  }, [domains.domains, hosting.hosting, emails.emails, sharedHostingHook.sharedHosting]);
 
   const upcomingRenewals = useMemo<UpcomingRenewal[]>(() => {
     const rows: UpcomingRenewal[] = [
@@ -174,12 +202,39 @@ export function useOverviewData() {
           annualCost: e.annual_cost,
           renewal: getRenewalInfo(e.expiration_date!),
         })),
+      // Shared hosting plans aren't tied to a client.
+      ...sharedHostingHook.sharedHosting.map((s) => ({
+        id: s.id,
+        kind: "shared_hosting" as const,
+        clientName: "—",
+        serviceName: s.name,
+        provider: s.provider,
+        expirationDate: s.expiration_date,
+        annualCost: s.annual_cost,
+        renewal: getRenewalInfo(s.expiration_date),
+      })),
     ];
 
     return rows.sort(
       (a, b) => a.renewal.daysRemaining - b.renewal.daysRemaining
     );
-  }, [domains.domains, hosting.hosting, emails.emails]);
+  }, [domains.domains, hosting.hosting, emails.emails, sharedHostingHook.sharedHosting]);
+
+  // For each shared hosting plan, which clients currently have a
+  // "Shared Host"-type hosting account linked to it — drives the
+  // Overview page's "Shared Hosting Usage" section.
+  const sharedHostingUsage = useMemo<SharedHostingUsage[]>(() => {
+    return sharedHostingHook.sharedHosting.map((plan) => {
+      const clientNames = Array.from(
+        new Set(
+          hosting.hosting
+            .filter((h) => h.host_type === "shared" && h.shared_hosting_id === plan.id)
+            .map((h) => h.client_name ?? "Unassigned")
+        )
+      ).sort();
+      return { plan, clientNames };
+    });
+  }, [sharedHostingHook.sharedHosting, hosting.hosting]);
 
   return {
     loading,
@@ -189,8 +244,10 @@ export function useOverviewData() {
     domainStats,
     hostingStats,
     emailStats,
+    sharedHostingStats,
     renewalWindowStats,
     financials,
     upcomingRenewals,
+    sharedHostingUsage,
   };
 }

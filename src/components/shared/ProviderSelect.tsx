@@ -7,6 +7,8 @@ interface ProviderSelectProps {
   onChange: (value: string) => void;
   label?: string;
   required?: boolean;
+  disabled?: boolean;
+  hint?: string;
 }
 
 /**
@@ -21,6 +23,8 @@ export function ProviderSelect({
   onChange,
   label = "Provider",
   required,
+  disabled,
+  hint,
 }: ProviderSelectProps) {
   const isCustom = value !== "" && !presets.includes(value);
   const selectValue = isCustom ? "Other" : value;
@@ -30,6 +34,8 @@ export function ProviderSelect({
       <Select
         label={label}
         required={required}
+        disabled={disabled}
+        hint={hint}
         value={selectValue}
         onChange={(e) => {
           const next = e.target.value;
@@ -51,6 +57,7 @@ export function ProviderSelect({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           required={required}
+          disabled={disabled}
         />
       )}
     </div>

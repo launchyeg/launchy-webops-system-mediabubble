@@ -68,7 +68,7 @@ export function DomainFormModal({
             client_id: domain.client_id ?? "",
             notes: domain.notes ?? "",
           }
-        : { ...EMPTY_FORM, client_id: defaultClientId ?? "" }
+        : { ...EMPTY_FORM, client_id: defaultClientId ?? "" },
     );
   }, [domain, open, defaultClientId]);
 
@@ -118,7 +118,9 @@ export function DomainFormModal({
       open={open}
       onClose={onClose}
       title={isEdit ? "Edit Domain" : "Add Domain"}
-      description={isEdit ? "Update this domain's details." : "Register a new domain."}
+      description={
+        isEdit ? "Update this domain's details." : "Register a new domain."
+      }
     >
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <Input
@@ -126,7 +128,9 @@ export function DomainFormModal({
           required
           placeholder="example.com"
           value={form.domain_name}
-          onChange={(e) => setForm((f) => ({ ...f, domain_name: e.target.value }))}
+          onChange={(e) =>
+            setForm((f) => ({ ...f, domain_name: e.target.value }))
+          }
         />
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <ProviderSelect
@@ -143,6 +147,15 @@ export function DomainFormModal({
             includeUnassigned={false}
           />
         </div>
+        <Input
+          label="Domain Account Email"
+          type="email"
+          hint="The login email for the registrar account."
+          value={form.account_email}
+          onChange={(e) =>
+            setForm((f) => ({ ...f, account_email: e.target.value }))
+          }
+        />
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Input
             label="Expiration Date"
@@ -160,7 +173,9 @@ export function DomainFormModal({
             step="0.01"
             required
             value={form.annual_cost}
-            onChange={(e) => setForm((f) => ({ ...f, annual_cost: e.target.value }))}
+            onChange={(e) =>
+              setForm((f) => ({ ...f, annual_cost: e.target.value }))
+            }
           />
         </div>
         <Input
@@ -170,7 +185,9 @@ export function DomainFormModal({
           step="0.01"
           hint="Your company's fee for managing this domain, on top of the annual cost."
           value={form.commission_usd}
-          onChange={(e) => setForm((f) => ({ ...f, commission_usd: e.target.value }))}
+          onChange={(e) =>
+            setForm((f) => ({ ...f, commission_usd: e.target.value }))
+          }
         />
         <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 dark:border-slate-800 dark:bg-slate-800/50">
           <p className="text-xs font-medium text-slate-400">
@@ -197,17 +214,12 @@ export function DomainFormModal({
             </dl>
           )}
         </div>
-        <Input
-          label="Domain Account Email"
-          type="email"
-          hint="The login email for the registrar account."
-          value={form.account_email}
-          onChange={(e) => setForm((f) => ({ ...f, account_email: e.target.value }))}
-        />
         <Switch
           id="domain-auto-renewal"
           checked={form.auto_renewal}
-          onChange={(checked) => setForm((f) => ({ ...f, auto_renewal: checked }))}
+          onChange={(checked) =>
+            setForm((f) => ({ ...f, auto_renewal: checked }))
+          }
           label="Auto Renewal Enabled"
         />
         <Textarea

@@ -32,7 +32,9 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
               "h-10 w-full min-w-0 flex-1 border border-slate-300 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400 transition-colors",
               suffix ? "rounded-l-lg border-r-0" : "rounded-lg",
               "focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20",
+              "disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500",
               "dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500",
+              "dark:disabled:border-slate-800 dark:disabled:bg-slate-800/60 dark:disabled:text-slate-500",
               error && "border-red-400 focus:border-red-500 focus:ring-red-500/20",
               className
             )}

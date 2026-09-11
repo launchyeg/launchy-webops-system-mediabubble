@@ -81,11 +81,22 @@ export type DomainRow = {
 export type DomainInsert = Omit<DomainRow, "id" | "created_at" | "updated_at">;
 export type DomainUpdate = Partial<DomainInsert>;
 
+export type HostType = "private" | "shared";
+
 export type HostingRow = {
   id: string;
   client_id: string | null;
   provider: string;
+  /** For a private host, exactly what was typed. For a shared host, a
+   * snapshot of the linked shared_hosting plan's name at save time (not a
+   * live join) — kept in sync with every existing view/table that already
+   * displays account_name as this row's title. */
   account_name: string;
+  /** "private" = a dedicated host with its own account_name; "shared" =
+   * linked to one shared_hosting plan via shared_hosting_id. */
+  host_type: HostType;
+  /** Set only when host_type is "shared". */
+  shared_hosting_id: string | null;
   status: ServiceStatus;
   expiration_date: string;
   auto_renewal: boolean;
@@ -167,6 +178,33 @@ export type EmailRow = {
 export type EmailInsert = Omit<EmailRow, "id" | "created_at" | "updated_at">;
 export type EmailUpdate = Partial<EmailInsert>;
 
+/** A shared hosting plan/server, tracked as infrastructure in its own
+ * right rather than a per-client service — unlike DomainRow, HostingRow,
+ * and EmailRow, this has no client_id. */
+export type SharedHostingRow = {
+  id: string;
+  name: string;
+  provider: string;
+  status: ServiceStatus;
+  expiration_date: string;
+  auto_renewal: boolean;
+  annual_cost: number;
+  /** The login/admin email for this shared server. Once a hosting account
+   * links to this plan, its own Hosting Provider and Hosting Account Email
+   * fields are auto-filled from this and `provider`, and become
+   * non-editable. */
+  account_email: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type SharedHostingInsert = Omit<
+  SharedHostingRow,
+  "id" | "created_at" | "updated_at"
+>;
+export type SharedHostingUpdate = Partial<SharedHostingInsert>;
+
 /** Reserved for future role-based access (e.g. "admin" vs a future
  * read-only collaborator role) without needing schema changes. */
 export type ProfileRow = {
@@ -211,6 +249,12 @@ export type Database = {
         Row: EmailRow;
         Insert: EmailInsert;
         Update: EmailUpdate;
+        Relationships: [];
+      };
+      shared_hosting: {
+        Row: SharedHostingRow;
+        Insert: SharedHostingInsert;
+        Update: SharedHostingUpdate;
         Relationships: [];
       };
       profiles: {

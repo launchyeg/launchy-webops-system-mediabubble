@@ -7,7 +7,7 @@ import type {
 
 export * from "./database";
 
-export type ServiceKind = "domain" | "hosting" | "email";
+export type ServiceKind = "domain" | "hosting" | "email" | "shared_hosting";
 
 /** The precise, always-fresh renewal urgency tier computed from
  * expiration_date, independent of the cached `status` column. */
