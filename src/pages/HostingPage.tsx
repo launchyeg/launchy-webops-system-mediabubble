@@ -17,7 +17,14 @@ import { deleteHosting } from "@/services/hosting.service";
 import { getRenewalInfo, formatDate, daysRemainingLabel } from "@/utils/dates";
 import { formatCurrency } from "@/utils/format";
 import { HOSTING_PROVIDERS } from "@/utils/constants";
-import type { HostingWithClient } from "@/types";
+import type { HostingWithDomains } from "@/types";
+
+/** One domain shows its name; more than one collapses to a count (with the
+ * full list in a tooltip) so the column doesn't overflow with long lists. */
+function websiteLabel(domainNames: string[]): string {
+  if (domainNames.length <= 1) return domainNames[0] ?? "—";
+  return `${domainNames.length} websites`;
+}
 
 export default function HostingPage() {
   const { hosting, loading, refetch } = useHosting();
@@ -32,8 +39,8 @@ export default function HostingPage() {
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
 
   const [formOpen, setFormOpen] = useState(false);
-  const [editing, setEditing] = useState<HostingWithClient | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<HostingWithClient | null>(null);
+  const [editing, setEditing] = useState<HostingWithDomains | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<HostingWithDomains | null>(null);
   const [deleting, setDeleting] = useState(false);
 
   const providers = useMemo(() => {
@@ -81,7 +88,7 @@ export default function HostingPage() {
     }
   };
 
-  const columns: DataTableColumn<HostingWithClient>[] = [
+  const columns: DataTableColumn<HostingWithDomains>[] = [
     {
       key: "account",
       header: "Hosting Account",
@@ -101,6 +108,18 @@ export default function HostingPage() {
     },
     { key: "provider", header: "Provider", render: (h) => h.provider },
     { key: "client", header: "Client", render: (h) => h.client_name ?? "Unassigned" },
+    {
+      key: "website",
+      header: "Website",
+      render: (h) => (
+        <span
+          className={h.domainNames.length === 0 ? "text-slate-400" : undefined}
+          title={h.domainNames.length > 1 ? h.domainNames.join(", ") : undefined}
+        >
+          {websiteLabel(h.domainNames)}
+        </span>
+      ),
+    },
     {
       key: "expiration",
       header: "Expiration",
@@ -127,8 +146,8 @@ export default function HostingPage() {
     },
     {
       key: "cost",
-      header: "Annual Cost",
-      render: (h) => formatCurrency(h.annual_cost),
+      header: "Final Price",
+      render: (h) => formatCurrency(h.annual_cost + h.commission_usd),
     },
     {
       key: "status",
@@ -240,6 +259,14 @@ export default function HostingPage() {
                     <p className="text-xs text-slate-400">
                       {h.provider} · {h.client_name ?? "Unassigned"}
                     </p>
+                    {h.domainNames.length > 0 && (
+                      <p
+                        className="text-xs text-slate-400"
+                        title={h.domainNames.length > 1 ? h.domainNames.join(", ") : undefined}
+                      >
+                        {websiteLabel(h.domainNames)}
+                      </p>
+                    )}
                   </div>
                   <StatusBadge renewal={getRenewalInfo(h.expiration_date)} />
                 </div>
@@ -253,7 +280,7 @@ export default function HostingPage() {
                     </p>
                   </div>
                   <p className="font-medium text-slate-900 dark:text-slate-100">
-                    {formatCurrency(h.annual_cost)}/yr
+                    {formatCurrency(h.annual_cost + h.commission_usd)}/yr
                   </p>
                 </div>
                 <div className="mt-3 flex justify-end gap-1">

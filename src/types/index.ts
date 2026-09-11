@@ -52,3 +52,8 @@ export type WithClientName<T> = T & { client_name: string | null };
 export type DomainWithClient = WithClientName<DomainRow>;
 export type HostingWithClient = WithClientName<HostingRow>;
 export type EmailWithClient = WithClientName<EmailRow>;
+
+/** A hosting row with the names of every domain linked to it via the
+ * hosting_domains join table — used for the Hosting page's "Website"
+ * column. Empty when nothing is linked yet. */
+export type HostingWithDomains = HostingWithClient & { domainNames: string[] };

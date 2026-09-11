@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { listHosting } from "@/services/hosting.service";
-import type { HostingWithClient } from "@/types";
+import type { HostingWithDomains } from "@/types";
 
 export function useHosting() {
-  const [hosting, setHosting] = useState<HostingWithClient[]>([]);
+  const [hosting, setHosting] = useState<HostingWithDomains[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 

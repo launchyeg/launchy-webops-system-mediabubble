@@ -134,8 +134,14 @@ export default function EmailsPage() {
     },
     {
       key: "cost",
-      header: "Annual Cost",
-      render: (e) => (e.is_lifetime ? formatEgp(e.lifetime_cost_egp) : formatCurrency(e.annual_cost)),
+      header: "Final Price",
+      // Recurring emails: the full final price to the client (email cost +
+      // commission), matching the form's "Final Price to Client" box.
+      // Lifetime emails: unchanged — their one-time EGP cost.
+      render: (e) =>
+        e.is_lifetime
+          ? formatEgp(e.lifetime_cost_egp)
+          : formatCurrency(e.annual_cost + e.commission_usd),
     },
     {
       key: "status",
@@ -260,7 +266,9 @@ export default function EmailsPage() {
                     </div>
                   )}
                   <p className="font-medium text-slate-900 dark:text-slate-100">
-                    {e.is_lifetime ? formatEgp(e.lifetime_cost_egp) : `${formatCurrency(e.annual_cost)}/yr`}
+                    {e.is_lifetime
+                      ? formatEgp(e.lifetime_cost_egp)
+                      : `${formatCurrency(e.annual_cost + e.commission_usd)}/yr`}
                   </p>
                 </div>
                 <div className="mt-3 flex justify-end gap-1">

@@ -1,16 +1,25 @@
 import { supabase } from "@/lib/supabaseClient";
-import type { HostingInsert, HostingRow, HostingUpdate, HostingWithClient } from "@/types";
+import type { HostingInsert, HostingRow, HostingUpdate, HostingWithDomains } from "@/types";
 
-const SELECT = "*, clients(client_name)";
+const SELECT = "*, clients(client_name), hosting_domains(domains(domain_name))";
 
-type RawRow = HostingRow & { clients: { client_name: string } | null };
+type RawRow = HostingRow & {
+  clients: { client_name: string } | null;
+  hosting_domains: { domains: { domain_name: string } | null }[] | null;
+};
 
-function flatten(row: RawRow): HostingWithClient {
-  const { clients, ...rest } = row;
-  return { ...rest, client_name: clients?.client_name ?? null };
+function flatten(row: RawRow): HostingWithDomains {
+  const { clients, hosting_domains, ...rest } = row;
+  return {
+    ...rest,
+    client_name: clients?.client_name ?? null,
+    domainNames: (hosting_domains ?? [])
+      .map((hd) => hd.domains?.domain_name)
+      .filter((name): name is string => Boolean(name)),
+  };
 }
 
-export async function listHosting(): Promise<HostingWithClient[]> {
+export async function listHosting(): Promise<HostingWithDomains[]> {
   const { data, error } = await supabase
     .from("hosting")
     .select(SELECT)

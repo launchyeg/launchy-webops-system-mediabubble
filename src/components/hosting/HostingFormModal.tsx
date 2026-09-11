@@ -44,9 +44,13 @@ const EMPTY_FORM = {
   annual_cost: "",
   commission_usd: "",
   client_id: "",
-  domain_ids: [] as string[],
+  // Always at least one row, even blank — the Domains section keeps a
+  // visible input ready rather than collapsing away when nothing's picked.
+  domain_ids: [""] as string[],
   notes: "",
 };
+
+const withAtLeastOneDomainRow = (ids: string[]) => (ids.length === 0 ? [""] : ids);
 
 export function HostingFormModal({
   open,
@@ -88,14 +92,14 @@ export function HostingFormModal({
             annual_cost: String(hosting.annual_cost ?? ""),
             commission_usd: String(hosting.commission_usd ?? ""),
             client_id: hosting.client_id ?? "",
-            domain_ids: [],
+            domain_ids: [""],
             notes: hosting.notes ?? "",
           }
         : { ...EMPTY_FORM, client_id: defaultClientId ?? "" }
     );
     if (hosting) {
       listHostingDomainIds(hosting.id)
-        .then((ids) => setForm((f) => ({ ...f, domain_ids: ids })))
+        .then((ids) => setForm((f) => ({ ...f, domain_ids: withAtLeastOneDomainRow(ids) })))
         .catch((err) => {
           toast({
             title: "Couldn't load this account's linked domains",
@@ -110,7 +114,7 @@ export function HostingFormModal({
   const handleClientChange = (clientId: string) =>
     // Switching clients invalidates any previously selected domains (they
     // belonged to the old client).
-    setForm((f) => ({ ...f, client_id: clientId, domain_ids: [] }));
+    setForm((f) => ({ ...f, client_id: clientId, domain_ids: [""] }));
 
   // A shared host's Provider and Account Email aren't typed manually — they
   // mirror the selected shared_hosting plan and become read-only.
@@ -138,7 +142,10 @@ export function HostingFormModal({
     }));
 
   const removeDomainRow = (index: number) =>
-    setForm((f) => ({ ...f, domain_ids: f.domain_ids.filter((_, i) => i !== index) }));
+    setForm((f) => ({
+      ...f,
+      domain_ids: withAtLeastOneDomainRow(f.domain_ids.filter((_, i) => i !== index)),
+    }));
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -319,50 +326,45 @@ export function HostingFormModal({
               </Button>
             )}
           </div>
-          {form.domain_ids.length === 0 ? (
-            <p className="text-xs text-slate-400">
-              {form.client_id
-                ? "No domains linked yet."
-                : "Select a client above first."}
-            </p>
-          ) : (
-            form.domain_ids.map((domainId, index) => {
-              const chosenElsewhere = new Set(
-                form.domain_ids.filter((id, i) => i !== index && id)
-              );
-              const options = clientDomains.filter(
-                (d) => d.id === domainId || !chosenElsewhere.has(d.id)
-              );
-              return (
-                <div key={index} className="flex items-center gap-2">
-                  <div className="min-w-0 flex-1">
-                    <Select
-                      value={domainId}
-                      onChange={(e) => updateDomainRow(index, e.target.value)}
-                    >
-                      <option value="">Select a domain…</option>
-                      {options.map((d) => (
-                        <option key={d.id} value={d.id}>
-                          {d.domain_name}
-                        </option>
-                      ))}
-                    </Select>
-                  </div>
-                  {form.host_type === "private" && (
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="ghost"
-                      aria-label="Remove domain"
-                      onClick={() => removeDomainRow(index)}
-                    >
-                      <Trash2 className="h-4 w-4 text-red-500" />
-                    </Button>
-                  )}
-                </div>
-              );
-            })
+          {!form.client_id && (
+            <p className="text-xs text-slate-400">Select a client above first.</p>
           )}
+          {form.domain_ids.map((domainId, index) => {
+            const chosenElsewhere = new Set(
+              form.domain_ids.filter((id, i) => i !== index && id)
+            );
+            const options = clientDomains.filter(
+              (d) => d.id === domainId || !chosenElsewhere.has(d.id)
+            );
+            return (
+              <div key={index} className="flex items-center gap-2">
+                <div className="min-w-0 flex-1">
+                  <Select
+                    value={domainId}
+                    onChange={(e) => updateDomainRow(index, e.target.value)}
+                  >
+                    <option value="">Select a domain…</option>
+                    {options.map((d) => (
+                      <option key={d.id} value={d.id}>
+                        {d.domain_name}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+                {form.host_type === "private" && (
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    aria-label="Remove domain"
+                    onClick={() => removeDomainRow(index)}
+                  >
+                    <Trash2 className="h-4 w-4 text-red-500" />
+                  </Button>
+                )}
+              </div>
+            );
+          })}
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
