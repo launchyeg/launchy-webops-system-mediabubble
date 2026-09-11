@@ -1,11 +1,26 @@
 import { supabase } from "@/lib/supabaseClient";
-import type { HostingInsert, HostingRow, HostingUpdate, HostingWithDomains } from "@/types";
+import type {
+  HostingInsert,
+  HostingRow,
+  HostingUpdate,
+  HostingWithDomainNames,
+  HostingWithDomains,
+} from "@/types";
 
 const SELECT = "*, clients(client_name), hosting_domains(domains(domain_name))";
+const SELECT_DOMAINS_ONLY = "*, hosting_domains(domains(domain_name))";
+
+type HostingDomainsEmbed = { domains: { domain_name: string } | null }[] | null;
+
+function extractDomainNames(hostingDomains: HostingDomainsEmbed): string[] {
+  return (hostingDomains ?? [])
+    .map((hd) => hd.domains?.domain_name)
+    .filter((name): name is string => Boolean(name));
+}
 
 type RawRow = HostingRow & {
   clients: { client_name: string } | null;
-  hosting_domains: { domains: { domain_name: string } | null }[] | null;
+  hosting_domains: HostingDomainsEmbed;
 };
 
 function flatten(row: RawRow): HostingWithDomains {
@@ -13,9 +28,7 @@ function flatten(row: RawRow): HostingWithDomains {
   return {
     ...rest,
     client_name: clients?.client_name ?? null,
-    domainNames: (hosting_domains ?? [])
-      .map((hd) => hd.domains?.domain_name)
-      .filter((name): name is string => Boolean(name)),
+    domainNames: extractDomainNames(hosting_domains),
   };
 }
 
@@ -30,14 +43,16 @@ export async function listHosting(): Promise<HostingWithDomains[]> {
 
 export async function listHostingByClient(
   clientId: string
-): Promise<HostingRow[]> {
+): Promise<HostingWithDomainNames[]> {
   const { data, error } = await supabase
     .from("hosting")
-    .select("*")
+    .select(SELECT_DOMAINS_ONLY)
     .eq("client_id", clientId)
     .order("expiration_date", { ascending: true });
   if (error) throw error;
-  return data ?? [];
+  return ((data ?? []) as unknown as (HostingRow & { hosting_domains: HostingDomainsEmbed })[]).map(
+    ({ hosting_domains, ...rest }) => ({ ...rest, domainNames: extractDomainNames(hosting_domains) })
+  );
 }
 
 export async function createHosting(input: HostingInsert): Promise<HostingRow> {

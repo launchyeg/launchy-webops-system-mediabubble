@@ -57,3 +57,8 @@ export type EmailWithClient = WithClientName<EmailRow>;
  * hosting_domains join table — used for the Hosting page's "Website"
  * column. Empty when nothing is linked yet. */
 export type HostingWithDomains = HostingWithClient & { domainNames: string[] };
+
+/** Like HostingWithDomains, but without client_name — for contexts (like
+ * the Client Details page) that already know which client these rows
+ * belong to. */
+export type HostingWithDomainNames = HostingRow & { domainNames: string[] };

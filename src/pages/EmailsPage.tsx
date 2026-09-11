@@ -136,12 +136,13 @@ export default function EmailsPage() {
       key: "cost",
       header: "Final Price",
       // Recurring emails: the full final price to the client (email cost +
-      // commission), matching the form's "Final Price to Client" box.
-      // Lifetime emails: unchanged — their one-time EGP cost.
+      // commission), matching the form's "Final Price to Client" box —
+      // "/yr" since it's an annual cost. Lifetime emails: unchanged — their
+      // one-time EGP cost, no "/yr" since it's a single payment.
       render: (e) =>
         e.is_lifetime
           ? formatEgp(e.lifetime_cost_egp)
-          : formatCurrency(e.annual_cost + e.commission_usd),
+          : `${formatCurrency(e.annual_cost + e.commission_usd)}/yr`,
     },
     {
       key: "status",

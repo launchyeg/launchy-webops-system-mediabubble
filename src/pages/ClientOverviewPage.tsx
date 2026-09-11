@@ -19,6 +19,7 @@ import { LifetimeBadge } from "@/components/shared/LifetimeBadge";
 import { ClientStatusBadge } from "@/components/clients/ClientStatusBadge";
 import { useClientOverview, type ClientOverviewGroup } from "@/hooks/useClientOverview";
 import { useDebounce } from "@/hooks/useDebounce";
+import { useUsdToEgpRate } from "@/hooks/useUsdToEgpRate";
 import { getRenewalInfo, formatDate } from "@/utils/dates";
 import { formatCurrency, formatEgp } from "@/utils/format";
 import { cn } from "@/lib/utils";
@@ -26,8 +27,29 @@ import type { DomainWithClient, HostingWithClient, EmailWithClient } from "@/typ
 
 const UNASSIGNED_KEY = "__unassigned__";
 
+/** A price with its live-converted equivalent in the other currency, e.g.
+ * "$420/yr" with "≈ £20,580/yr" underneath — `null` secondaryText just
+ * omits the second line (rate still loading or unavailable). */
+function DualPrice({
+  primaryText,
+  secondaryText,
+  align = "right",
+}: {
+  primaryText: string;
+  secondaryText: string | null;
+  align?: "left" | "right";
+}) {
+  return (
+    <div className={align === "right" ? "text-right" : undefined}>
+      <p className="text-sm font-medium text-slate-900 dark:text-slate-100">{primaryText}</p>
+      {secondaryText && <p className="text-xs text-slate-400">≈ {secondaryText}</p>}
+    </div>
+  );
+}
+
 export default function ClientOverviewPage() {
   const { loading, groups } = useClientOverview();
+  const { rate: egpRate } = useUsdToEgpRate();
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounce(search);
   const navigate = useNavigate();
@@ -91,6 +113,7 @@ export default function ClientOverviewPage() {
                 <ClientGroupCard
                   key={key}
                   group={group}
+                  egpRate={egpRate}
                   open={expanded.has(key)}
                   onToggle={() => toggle(key)}
                   onView={
@@ -108,16 +131,31 @@ export default function ClientOverviewPage() {
 
 function ClientGroupCard({
   group,
+  egpRate,
   open,
   onToggle,
   onView,
 }: {
   group: ClientOverviewGroup;
+  egpRate: number | null;
   open: boolean;
   onToggle: () => void;
   onView?: () => void;
 }) {
   const isUnassigned = !group.client;
+  // A blended total across both currencies: USD-priced services converted
+  // into the EGP figure, and the Shared Host EGP total converted into the
+  // USD figure — each is the same combined total, just expressed in its
+  // own currency. Falls back to USD-only (its pre-conversion shape) while
+  // the rate is still loading or unavailable.
+  const totalUsd =
+    egpRate !== null
+      ? group.totalAnnualCostUsd + group.totalAnnualCostEgp / egpRate
+      : group.totalAnnualCostUsd;
+  const totalEgp =
+    egpRate !== null
+      ? group.totalAnnualCostEgp + group.totalAnnualCostUsd * egpRate
+      : null;
 
   return (
     <Card className="overflow-hidden">
@@ -159,9 +197,12 @@ function ClientGroupCard({
           <CountPill icon={Globe} count={group.domains.length} label="Domains" />
           <CountPill icon={Server} count={group.hosting.length} label="Hosting" />
           <CountPill icon={Mail} count={group.emails.length} label="Email" />
-          <p className="w-20 shrink-0 text-right text-sm font-medium text-slate-900 dark:text-slate-100">
-            {formatCurrency(group.totalAnnualCost)}/yr
-          </p>
+          <div className="shrink-0">
+            <DualPrice
+              primaryText={`${formatCurrency(totalUsd)}/yr`}
+              secondaryText={totalEgp !== null ? `${formatEgp(totalEgp)}/yr` : null}
+            />
+          </div>
           <ClientStatusBadge tier={group.worstTier} />
           {onView && (
             <span
@@ -196,13 +237,31 @@ function ClientGroupCard({
           ) : (
             <>
               {group.domains.map((d) => (
-                <DetailRow key={`domain-${d.id}`} icon={Globe} kind="Domain" data={d} />
+                <DetailRow
+                  key={`domain-${d.id}`}
+                  icon={Globe}
+                  kind="Domain"
+                  data={d}
+                  egpRate={egpRate}
+                />
               ))}
               {group.hosting.map((h) => (
-                <DetailRow key={`hosting-${h.id}`} icon={Server} kind="Hosting" data={h} />
+                <DetailRow
+                  key={`hosting-${h.id}`}
+                  icon={Server}
+                  kind="Hosting"
+                  data={h}
+                  egpRate={egpRate}
+                />
               ))}
               {group.emails.map((e) => (
-                <DetailRow key={`email-${e.id}`} icon={Mail} kind="Email" data={e} />
+                <DetailRow
+                  key={`email-${e.id}`}
+                  icon={Mail}
+                  kind="Email"
+                  data={e}
+                  egpRate={egpRate}
+                />
               ))}
             </>
           )}
@@ -239,14 +298,40 @@ function DetailRow({
   icon: Icon,
   kind,
   data,
+  egpRate,
 }: {
   icon: typeof Globe;
   kind: "Domain" | "Hosting" | "Email";
   data: DetailRowData;
+  egpRate: number | null;
 }) {
   const name =
     "domain_name" in data ? data.domain_name : "account_name" in data ? data.account_name : data.email_account;
   const isLifetime = "is_lifetime" in data && data.is_lifetime;
+  const isSharedHost = "host_type" in data && data.host_type === "shared";
+  // Lifetime email: one-time EGP cost, no "/yr". Shared Host: recurring EGP
+  // cost, gets "/yr". Everything else: USD final price (base + commission).
+  const egpCost = isLifetime
+    ? "lifetime_cost_egp" in data
+      ? data.lifetime_cost_egp
+      : 0
+    : isSharedHost
+      ? "annual_cost_egp" in data
+        ? data.annual_cost_egp
+        : 0
+      : undefined;
+
+  const suffix = isLifetime ? "" : "/yr";
+  let priceText: string;
+  let convertedText: string | null = null;
+  if (egpCost !== undefined) {
+    priceText = `${formatEgp(egpCost)}${suffix}`;
+    if (egpRate !== null) convertedText = `${formatCurrency(egpCost / egpRate)}${suffix}`;
+  } else {
+    const usd = data.annual_cost + data.commission_usd;
+    priceText = `${formatCurrency(usd)}${suffix}`;
+    if (egpRate !== null) convertedText = `${formatEgp(usd * egpRate)}${suffix}`;
+  }
 
   return (
     <div className="flex flex-col gap-2 px-5 py-3 pl-12 sm:flex-row sm:items-center sm:justify-between">
@@ -267,9 +352,10 @@ function DetailRow({
             {isLifetime ? "Never expires" : formatDate(data.expiration_date)}
           </p>
           <p className="text-xs text-slate-400">
-            {isLifetime
-              ? formatEgp("lifetime_cost_egp" in data ? data.lifetime_cost_egp : 0)
-              : `${formatCurrency(data.annual_cost)}/yr`}
+            {priceText}
+            {convertedText && (
+              <span className="text-slate-400/70"> (≈ {convertedText})</span>
+            )}
           </p>
         </div>
         {isLifetime ? (

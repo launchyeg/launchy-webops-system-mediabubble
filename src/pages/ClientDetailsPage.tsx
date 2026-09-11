@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
   Building2,
   Calendar,
+  ChevronDown,
   Globe,
   Mail,
   Pencil,
@@ -33,7 +34,13 @@ import { deleteHosting, listHostingByClient } from "@/services/hosting.service";
 import { deleteEmail, listEmailsByClient } from "@/services/emails.service";
 import { getRenewalInfo, formatDate } from "@/utils/dates";
 import { formatCurrency, formatEgp } from "@/utils/format";
-import type { ClientRow, DomainRow, HostingRow, EmailRow } from "@/types";
+import { cn } from "@/lib/utils";
+import type {
+  ClientRow,
+  DomainRow,
+  HostingWithDomainNames,
+  EmailRow,
+} from "@/types";
 
 export default function ClientDetailsPage() {
   const { id } = useParams<{ id: string }>();
@@ -43,7 +50,7 @@ export default function ClientDetailsPage() {
 
   const [client, setClient] = useState<ClientRow | null>(null);
   const [domains, setDomains] = useState<DomainRow[]>([]);
-  const [hosting, setHosting] = useState<HostingRow[]>([]);
+  const [hosting, setHosting] = useState<HostingWithDomainNames[]>([]);
   const [emails, setEmails] = useState<EmailRow[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -52,7 +59,7 @@ export default function ClientDetailsPage() {
     open: false,
     row: null,
   });
-  const [hostingModal, setHostingModal] = useState<{ open: boolean; row: HostingRow | null }>({
+  const [hostingModal, setHostingModal] = useState<{ open: boolean; row: HostingWithDomainNames | null }>({
     open: false,
     row: null,
   });
@@ -62,11 +69,25 @@ export default function ClientDetailsPage() {
   });
   const [deleteTarget, setDeleteTarget] = useState<
     | { kind: "domain"; row: DomainRow }
-    | { kind: "hosting"; row: HostingRow }
+    | { kind: "hosting"; row: HostingWithDomainNames }
     | { kind: "email"; row: EmailRow }
     | null
   >(null);
   const [deleting, setDeleting] = useState(false);
+  const [expandedHostingIds, setExpandedHostingIds] = useState<Set<string>>(new Set());
+
+  const domainNameById = useMemo(
+    () => new Map(domains.map((d) => [d.id, d.domain_name])),
+    [domains]
+  );
+
+  const toggleHostingExpanded = (id: string) =>
+    setExpandedHostingIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -205,6 +226,13 @@ export default function ClientDetailsPage() {
                   subtitle={d.provider}
                   expirationDate={d.expiration_date}
                   annualCost={d.annual_cost}
+                  commissionUsd={d.commission_usd}
+                  extra={
+                    <>
+                      {d.account_email && <p className="text-xs text-slate-400">{d.account_email}</p>}
+                      {d.notes && <p className="text-xs text-slate-400">{d.notes}</p>}
+                    </>
+                  }
                   onEdit={() => setDomainModal({ open: true, row: d })}
                   onDelete={() => setDeleteTarget({ kind: "domain", row: d })}
                 />
@@ -232,6 +260,48 @@ export default function ClientDetailsPage() {
                   subtitle={h.provider}
                   expirationDate={h.expiration_date}
                   annualCost={h.annual_cost}
+                  commissionUsd={h.commission_usd}
+                  egpCost={h.host_type === "shared" ? h.annual_cost_egp : undefined}
+                  extra={
+                    h.host_type === "private" ? (
+                      <>
+                        {h.account_email && (
+                          <p className="text-xs text-slate-400">{h.account_email}</p>
+                        )}
+                        <div className="flex items-center gap-1.5">
+                          <p className="text-xs text-slate-400">
+                            {h.domainNames.length}{" "}
+                            {h.domainNames.length === 1 ? "website" : "websites"}
+                          </p>
+                          {h.domainNames.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => toggleHostingExpanded(h.id)}
+                              className="inline-flex items-center gap-0.5 text-xs font-medium text-brand-600 hover:underline dark:text-brand-400"
+                            >
+                              {expandedHostingIds.has(h.id) ? "Hide" : "Show"} domains
+                              <ChevronDown
+                                className={cn(
+                                  "h-3 w-3 transition-transform",
+                                  expandedHostingIds.has(h.id) && "rotate-180"
+                                )}
+                              />
+                            </button>
+                          )}
+                        </div>
+                        {expandedHostingIds.has(h.id) && h.domainNames.length > 0 && (
+                          <p className="text-xs text-slate-400">{h.domainNames.join(", ")}</p>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        {h.domainNames.length > 0 && (
+                          <p className="text-xs text-slate-400">{h.domainNames.join(", ")}</p>
+                        )}
+                        {h.notes && <p className="text-xs text-slate-400">{h.notes}</p>}
+                      </>
+                    )
+                  }
                   onEdit={() => setHostingModal({ open: true, row: h })}
                   onDelete={() => setDeleteTarget({ kind: "hosting", row: h })}
                 />
@@ -259,8 +329,22 @@ export default function ClientDetailsPage() {
                   subtitle={e.provider}
                   expirationDate={e.expiration_date}
                   annualCost={e.annual_cost}
+                  commissionUsd={e.commission_usd}
                   isLifetime={e.is_lifetime}
-                  lifetimeCostEgp={e.lifetime_cost_egp}
+                  egpCost={e.is_lifetime ? e.lifetime_cost_egp : undefined}
+                  extra={
+                    <>
+                      {e.domain_id && domainNameById.has(e.domain_id) && (
+                        <p className="text-xs text-slate-400">
+                          {domainNameById.get(e.domain_id)}
+                        </p>
+                      )}
+                      {e.account_email && (
+                        <p className="text-xs text-slate-400">{e.account_email}</p>
+                      )}
+                      {e.notes && <p className="text-xs text-slate-400">{e.notes}</p>}
+                    </>
+                  }
                   onEdit={() => setEmailModal({ open: true, row: e })}
                   onDelete={() => setDeleteTarget({ kind: "email", row: e })}
                 />
@@ -385,8 +469,10 @@ function ServiceRow({
   subtitle,
   expirationDate,
   annualCost,
+  commissionUsd,
   isLifetime,
-  lifetimeCostEgp,
+  egpCost,
+  extra,
   onEdit,
   onDelete,
 }: {
@@ -394,8 +480,17 @@ function ServiceRow({
   subtitle: string;
   expirationDate: string | null;
   annualCost: number;
+  /** Added to annualCost for the displayed Final Price — omitted (or 0) for
+   * a row with no commission concept, e.g. a Shared Host priced in EGP. */
+  commissionUsd?: number;
   isLifetime?: boolean;
-  lifetimeCostEgp?: number;
+  /** When set, shown instead of the computed USD Final Price — a Lifetime
+   * email's one-time cost, or a Shared Host's recurring EGP cost. */
+  egpCost?: number;
+  /** Extra detail lines rendered under the subtitle — differs per service
+   * type (linked domain/notes for Email, email/website count for Hosting,
+   * account email/notes for Domain). */
+  extra?: React.ReactNode;
   onEdit: () => void;
   onDelete: () => void;
 }) {
@@ -404,6 +499,7 @@ function ServiceRow({
       <div className="min-w-0">
         <p className="truncate font-medium text-slate-900 dark:text-slate-100">{title}</p>
         <p className="text-xs text-slate-400">{subtitle}</p>
+        {extra}
       </div>
       <div className="flex flex-wrap items-center gap-4 sm:gap-6">
         <div className="text-sm">
@@ -411,7 +507,9 @@ function ServiceRow({
             {isLifetime ? "Never expires" : formatDate(expirationDate)}
           </p>
           <p className="text-xs text-slate-400">
-            {isLifetime ? formatEgp(lifetimeCostEgp) : `${formatCurrency(annualCost)}/yr`}
+            {egpCost !== undefined
+              ? `${formatEgp(egpCost)}${isLifetime ? "" : "/yr"}`
+              : `${formatCurrency(annualCost + (commissionUsd ?? 0))}/yr`}
           </p>
         </div>
         {isLifetime ? (

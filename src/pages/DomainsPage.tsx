@@ -121,8 +121,8 @@ export default function DomainsPage() {
     },
     {
       key: "cost",
-      header: "Annual Cost",
-      render: (d) => formatCurrency(d.annual_cost),
+      header: "Final Price",
+      render: (d) => `${formatCurrency(d.annual_cost + d.commission_usd)}/yr`,
     },
     {
       key: "status",
@@ -240,7 +240,7 @@ export default function DomainsPage() {
                     </p>
                   </div>
                   <p className="font-medium text-slate-900 dark:text-slate-100">
-                    {formatCurrency(d.annual_cost)}/yr
+                    {formatCurrency(d.annual_cost + d.commission_usd)}/yr
                   </p>
                 </div>
                 <div className="mt-3 flex justify-end gap-1">

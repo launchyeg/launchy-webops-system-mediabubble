@@ -148,11 +148,12 @@ export default function HostingPage() {
       key: "cost",
       header: "Final Price",
       // Private: USD final price (annual cost + commission). Shared: the
-      // recurring annual cost, entered directly in EGP.
+      // recurring annual cost, entered directly in EGP. Both recurring, so
+      // both get "/yr".
       render: (h) =>
         h.host_type === "shared"
-          ? formatEgp(h.annual_cost_egp)
-          : formatCurrency(h.annual_cost + h.commission_usd),
+          ? `${formatEgp(h.annual_cost_egp)}/yr`
+          : `${formatCurrency(h.annual_cost + h.commission_usd)}/yr`,
     },
     {
       key: "status",
@@ -286,7 +287,7 @@ export default function HostingPage() {
                   </div>
                   <p className="font-medium text-slate-900 dark:text-slate-100">
                     {h.host_type === "shared"
-                      ? formatEgp(h.annual_cost_egp)
+                      ? `${formatEgp(h.annual_cost_egp)}/yr`
                       : `${formatCurrency(h.annual_cost + h.commission_usd)}/yr`}
                   </p>
                 </div>

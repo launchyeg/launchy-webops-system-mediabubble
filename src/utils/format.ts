@@ -19,17 +19,17 @@ export function formatCurrency(value: number | null | undefined): string {
     : preciseCurrencyFormatter.format(value);
 }
 
-const egpFormatter = new Intl.NumberFormat("en-EG", {
-  style: "currency",
-  currency: "EGP",
+// Built manually (number formatting + a literal "£" prefix) rather than
+// Intl's `currency: "EGP"` style — ICU renders that inconsistently across
+// environments ("EGP", "E£", or Arabic text depending on locale data), so
+// this guarantees the same "£1,234" output everywhere.
+const egpNumberFormatter = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 0,
 });
 
 export function formatEgp(value: number | null | undefined): string {
-  if (value === null || value === undefined || Number.isNaN(value)) {
-    return egpFormatter.format(0);
-  }
-  return egpFormatter.format(value);
+  const amount = value === null || value === undefined || Number.isNaN(value) ? 0 : value;
+  return `£${egpNumberFormatter.format(amount)}`;
 }
 
 export function pluralize(count: number, noun: string, plural?: string) {

@@ -9,6 +9,7 @@ import { StatusBadge } from "@/components/shared/StatusBadge";
 import { ServiceFilters, type StatusFilterValue } from "@/components/shared/ServiceFilters";
 import { SharedHostingFormModal } from "@/components/sharedHosting/SharedHostingFormModal";
 import { useSharedHosting } from "@/hooks/useSharedHosting";
+import { useHosting } from "@/hooks/useHosting";
 import { useDebounce } from "@/hooks/useDebounce";
 import { useToast } from "@/contexts/ToastContext";
 import { deleteSharedHosting } from "@/services/sharedHosting.service";
@@ -19,7 +20,24 @@ import type { SharedHostingRow } from "@/types";
 
 export default function SharedHostingPage() {
   const { sharedHosting, loading, refetch } = useSharedHosting();
+  const { hosting } = useHosting();
   const { toast } = useToast();
+
+  // Total websites (domains) across every client hosting account linked to
+  // each shared plan — a shared plan's own "how much is actually on this
+  // server" count, distinct from the plan's own row in `hosting`.
+  const websiteCountByPlan = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const h of hosting) {
+      if (h.host_type === "shared" && h.shared_hosting_id) {
+        counts.set(
+          h.shared_hosting_id,
+          (counts.get(h.shared_hosting_id) ?? 0) + h.domainNames.length
+        );
+      }
+    }
+    return counts;
+  }, [hosting]);
 
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounce(search);
@@ -85,6 +103,18 @@ export default function SharedHostingPage() {
       ),
     },
     { key: "provider", header: "Provider", render: (h) => h.provider },
+    {
+      key: "websites",
+      header: "Total Websites",
+      render: (h) => {
+        const count = websiteCountByPlan.get(h.id) ?? 0;
+        return (
+          <span className={count === 0 ? "text-slate-400" : undefined}>
+            {count} {count === 1 ? "website" : "websites"}
+          </span>
+        );
+      },
+    },
     {
       key: "expiration",
       header: "Expiration",
@@ -213,7 +243,10 @@ export default function SharedHostingPage() {
                     <p className="font-semibold text-slate-900 dark:text-slate-100">
                       {h.name}
                     </p>
-                    <p className="text-xs text-slate-400">{h.provider}</p>
+                    <p className="text-xs text-slate-400">
+                      {h.provider} · {websiteCountByPlan.get(h.id) ?? 0}{" "}
+                      {(websiteCountByPlan.get(h.id) ?? 0) === 1 ? "website" : "websites"}
+                    </p>
                   </div>
                   <StatusBadge renewal={getRenewalInfo(h.expiration_date)} />
                 </div>

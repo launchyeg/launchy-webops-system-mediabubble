@@ -31,7 +31,13 @@ export interface ClientOverviewGroup {
   hosting: HostingWithClient[];
   emails: EmailWithClient[];
   serviceCount: number;
-  totalAnnualCost: number;
+  /** Sum of every USD-priced service's final price (base + commission):
+   * domains, Private hosting, and recurring (non-Lifetime) email. */
+  totalAnnualCostUsd: number;
+  /** Sum of every Shared Host's recurring annual_cost_egp. A Lifetime
+   * email's one-time EGP cost is excluded from both totals — it's not a
+   * recurring annual cost. */
+  totalAnnualCostEgp: number;
   worstTier: RenewalTier | null;
 }
 
@@ -59,7 +65,8 @@ export function useClientOverview() {
       hosting: [],
       emails: [],
       serviceCount: 0,
-      totalAnnualCost: 0,
+      totalAnnualCostUsd: 0,
+      totalAnnualCostEgp: 0,
       worstTier: null,
     });
 
@@ -76,12 +83,25 @@ export function useClientOverview() {
 
     const finalize = (g: ClientOverviewGroup) => {
       const rows = [
-        ...g.domains.map((d) => ({ expiration_date: d.expiration_date, annual_cost: d.annual_cost })),
-        ...g.hosting.map((h) => ({ expiration_date: h.expiration_date, annual_cost: h.annual_cost })),
-        ...g.emails.map((e) => ({ expiration_date: e.expiration_date, annual_cost: e.annual_cost })),
+        ...g.domains.map((d) => ({ expiration_date: d.expiration_date })),
+        ...g.hosting.map((h) => ({ expiration_date: h.expiration_date })),
+        ...g.emails.map((e) => ({ expiration_date: e.expiration_date })),
       ];
       g.serviceCount = rows.length;
-      g.totalAnnualCost = rows.reduce((sum, r) => sum + (r.annual_cost ?? 0), 0);
+
+      const privateHosting = g.hosting.filter((h) => h.host_type !== "shared");
+      const sharedHosting = g.hosting.filter((h) => h.host_type === "shared");
+      const recurringEmails = g.emails.filter((e) => !e.is_lifetime);
+
+      g.totalAnnualCostUsd =
+        g.domains.reduce((sum, d) => sum + d.annual_cost + d.commission_usd, 0) +
+        privateHosting.reduce((sum, h) => sum + h.annual_cost + h.commission_usd, 0) +
+        recurringEmails.reduce((sum, e) => sum + e.annual_cost + e.commission_usd, 0);
+
+      // A Lifetime email's one-time EGP cost isn't a recurring annual
+      // cost, so it's excluded here (and everywhere else in the app).
+      g.totalAnnualCostEgp = sharedHosting.reduce((sum, h) => sum + h.annual_cost_egp, 0);
+
       // A lifetime email (null expiration_date) never contributes to the
       // worst tier, but its mere presence still means this client has at
       // least an "active" service, not "no services" — hence starting the
