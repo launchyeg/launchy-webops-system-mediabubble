@@ -133,11 +133,19 @@ create table if not exists hosting (
   expiration_date date not null,
   auto_renewal boolean not null default false,
   account_email text,
+  -- USD annual cost + commission — used only for a "Private" host
+  -- (0 for "Shared", which prices in EGP via annual_cost_egp instead).
   annual_cost numeric(10, 2) not null default 0,
   -- The company's commission for managing this hosting account, in USD.
   -- Purely informational — shown in the UI next to annual_cost as the final
   -- price sent to the client; nothing in the app derives logic from it.
+  -- Used only for a "Private" host (0 for "Shared").
   commission_usd numeric(10, 2) not null default 0,
+  -- A "Shared" host's recurring annual cost, entered directly in EGP
+  -- instead of USD, with no commission/Final-Price breakdown. Used only
+  -- for a "Shared" host (0 for "Private"). Still a recurring annual cost,
+  -- unlike a Lifetime email's one-time payment — just a different currency.
+  annual_cost_egp numeric(10, 2) not null default 0,
   notes text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()

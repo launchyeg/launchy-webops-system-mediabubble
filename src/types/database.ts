@@ -101,11 +101,20 @@ export type HostingRow = {
   expiration_date: string;
   auto_renewal: boolean;
   account_email: string | null;
+  /** USD annual cost. Used only when host_type is "private" (0 for
+   * "shared", which prices in EGP via annual_cost_egp instead). */
   annual_cost: number;
   /** The company's commission for managing this hosting account, in USD.
    * Purely informational — displayed as the final price sent to the client
-   * (annual_cost + commission_usd); nothing derives logic from it. */
+   * (annual_cost + commission_usd); nothing derives logic from it. Used
+   * only when host_type is "private" (0 for "shared"). */
   commission_usd: number;
+  /** A "shared" host's recurring annual cost, entered directly in EGP
+   * instead of USD, with no commission/Final-Price breakdown. Used only
+   * when host_type is "shared" (0 for "private"). Still recurring/annual,
+   * unlike a lifetime email's one-time payment — just a different
+   * currency. */
+  annual_cost_egp: number;
   notes: string | null;
   created_at: string;
   updated_at: string;

@@ -15,7 +15,7 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { useToast } from "@/contexts/ToastContext";
 import { deleteHosting } from "@/services/hosting.service";
 import { getRenewalInfo, formatDate, daysRemainingLabel } from "@/utils/dates";
-import { formatCurrency } from "@/utils/format";
+import { formatCurrency, formatEgp } from "@/utils/format";
 import { HOSTING_PROVIDERS } from "@/utils/constants";
 import type { HostingWithDomains } from "@/types";
 
@@ -147,7 +147,12 @@ export default function HostingPage() {
     {
       key: "cost",
       header: "Final Price",
-      render: (h) => formatCurrency(h.annual_cost + h.commission_usd),
+      // Private: USD final price (annual cost + commission). Shared: the
+      // recurring annual cost, entered directly in EGP.
+      render: (h) =>
+        h.host_type === "shared"
+          ? formatEgp(h.annual_cost_egp)
+          : formatCurrency(h.annual_cost + h.commission_usd),
     },
     {
       key: "status",
@@ -280,7 +285,9 @@ export default function HostingPage() {
                     </p>
                   </div>
                   <p className="font-medium text-slate-900 dark:text-slate-100">
-                    {formatCurrency(h.annual_cost + h.commission_usd)}/yr
+                    {h.host_type === "shared"
+                      ? formatEgp(h.annual_cost_egp)
+                      : `${formatCurrency(h.annual_cost + h.commission_usd)}/yr`}
                   </p>
                 </div>
                 <div className="mt-3 flex justify-end gap-1">

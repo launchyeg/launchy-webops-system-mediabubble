@@ -43,6 +43,7 @@ const EMPTY_FORM = {
   account_email: "",
   annual_cost: "",
   commission_usd: "",
+  annual_cost_egp: "",
   client_id: "",
   // Always at least one row, even blank — the Domains section keeps a
   // visible input ready rather than collapsing away when nothing's picked.
@@ -91,6 +92,7 @@ export function HostingFormModal({
             account_email: hosting.account_email ?? "",
             annual_cost: String(hosting.annual_cost ?? ""),
             commission_usd: String(hosting.commission_usd ?? ""),
+            annual_cost_egp: String(hosting.annual_cost_egp ?? ""),
             client_id: hosting.client_id ?? "",
             domain_ids: [""],
             notes: hosting.notes ?? "",
@@ -176,8 +178,10 @@ export function HostingFormModal({
         expiration_date: form.expiration_date,
         auto_renewal: form.auto_renewal,
         account_email: form.account_email.trim() || null,
-        annual_cost: Number(form.annual_cost) || 0,
-        commission_usd: Number(form.commission_usd) || 0,
+        annual_cost: form.host_type === "shared" ? 0 : Number(form.annual_cost) || 0,
+        commission_usd: form.host_type === "shared" ? 0 : Number(form.commission_usd) || 0,
+        annual_cost_egp:
+          form.host_type === "shared" ? Number(form.annual_cost_egp) || 0 : 0,
         client_id: form.client_id,
         notes: form.notes.trim() || null,
         status: renewalTierToServiceStatus(tier),
@@ -377,50 +381,66 @@ export function HostingFormModal({
               setForm((f) => ({ ...f, expiration_date: e.target.value }))
             }
           />
-          <Input
-            label="Annual Cost (USD)"
-            type="number"
-            min="0"
-            step="0.01"
-            required
-            value={form.annual_cost}
-            onChange={(e) => setForm((f) => ({ ...f, annual_cost: e.target.value }))}
-          />
-        </div>
-        <Input
-          label="Commission (USD)"
-          type="number"
-          min="0"
-          step="0.01"
-          hint="Your company's fee for managing this hosting account, on top of the annual cost."
-          value={form.commission_usd}
-          onChange={(e) => setForm((f) => ({ ...f, commission_usd: e.target.value }))}
-        />
-        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 dark:border-slate-800 dark:bg-slate-800/50">
-          <p className="text-xs font-medium text-slate-400">
-            Final Price to Client
-          </p>
-          <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-            {formatCurrency(finalPriceUsd)}
-            {egpRate !== null && (
-              <span className="ml-1.5 font-normal text-slate-500 dark:text-slate-400">
-                (≈ {formatEgp(finalPriceUsd * egpRate)})
-              </span>
-            )}
-          </p>
-          {egpRate !== null && (
-            <dl className="mt-1.5 space-y-0.5 border-t border-slate-200 pt-1.5 text-xs text-slate-500 dark:border-slate-700 dark:text-slate-400">
-              <div className="flex justify-between gap-2">
-                <dt>Hosting price</dt>
-                <dd>{formatEgp(annualCostUsd * egpRate)}</dd>
-              </div>
-              <div className="flex justify-between gap-2">
-                <dt>Commission</dt>
-                <dd>{formatEgp(commissionUsd * egpRate)}</dd>
-              </div>
-            </dl>
+          {form.host_type === "shared" ? (
+            <Input
+              label="Annual Cost (EGP)"
+              type="number"
+              min="0"
+              step="0.01"
+              required
+              value={form.annual_cost_egp}
+              onChange={(e) => setForm((f) => ({ ...f, annual_cost_egp: e.target.value }))}
+            />
+          ) : (
+            <Input
+              label="Annual Cost (USD)"
+              type="number"
+              min="0"
+              step="0.01"
+              required
+              value={form.annual_cost}
+              onChange={(e) => setForm((f) => ({ ...f, annual_cost: e.target.value }))}
+            />
           )}
         </div>
+        {form.host_type === "private" && (
+          <>
+            <Input
+              label="Commission (USD)"
+              type="number"
+              min="0"
+              step="0.01"
+              hint="Your company's fee for managing this hosting account, on top of the annual cost."
+              value={form.commission_usd}
+              onChange={(e) => setForm((f) => ({ ...f, commission_usd: e.target.value }))}
+            />
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 dark:border-slate-800 dark:bg-slate-800/50">
+              <p className="text-xs font-medium text-slate-400">
+                Final Price to Client
+              </p>
+              <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                {formatCurrency(finalPriceUsd)}
+                {egpRate !== null && (
+                  <span className="ml-1.5 font-normal text-slate-500 dark:text-slate-400">
+                    (≈ {formatEgp(finalPriceUsd * egpRate)})
+                  </span>
+                )}
+              </p>
+              {egpRate !== null && (
+                <dl className="mt-1.5 space-y-0.5 border-t border-slate-200 pt-1.5 text-xs text-slate-500 dark:border-slate-700 dark:text-slate-400">
+                  <div className="flex justify-between gap-2">
+                    <dt>Hosting price</dt>
+                    <dd>{formatEgp(annualCostUsd * egpRate)}</dd>
+                  </div>
+                  <div className="flex justify-between gap-2">
+                    <dt>Commission</dt>
+                    <dd>{formatEgp(commissionUsd * egpRate)}</dd>
+                  </div>
+                </dl>
+              )}
+            </div>
+          </>
+        )}
         <Switch
           id="hosting-auto-renewal"
           checked={form.auto_renewal}
