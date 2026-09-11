@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { StatusBadge } from "@/components/shared/StatusBadge";
+import { LifetimeBadge } from "@/components/shared/LifetimeBadge";
 import { ServiceFilters, type StatusFilterValue } from "@/components/shared/ServiceFilters";
 import { EmailFormModal } from "@/components/email/EmailFormModal";
 import { useEmails } from "@/hooks/useEmails";
@@ -14,7 +15,7 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { useToast } from "@/contexts/ToastContext";
 import { deleteEmail } from "@/services/emails.service";
 import { getRenewalInfo, formatDate, daysRemainingLabel } from "@/utils/dates";
-import { formatCurrency } from "@/utils/format";
+import { formatCurrency, formatEgp } from "@/utils/format";
 import { EMAIL_PROVIDERS } from "@/utils/constants";
 import type { EmailWithClient } from "@/types";
 
@@ -48,12 +49,19 @@ export default function EmailsPage() {
       if (clientFilter && e.client_id !== clientFilter) return false;
       if (providerFilter && e.provider !== providerFilter) return false;
       if (statusFilter !== "all") {
-        const tier = getRenewalInfo(e.expiration_date).tier;
+        // Lifetime services never expire — they only ever match the
+        // "Active" filter, never a renewal-urgency one.
+        const tier = e.is_lifetime ? "active" : getRenewalInfo(e.expiration_date!).tier;
         if (tier !== statusFilter) return false;
       }
       return true;
     });
     rows = [...rows].sort((a, b) => {
+      // Lifetime rows have no expiration_date — always sort them after
+      // dated ones, regardless of sort direction.
+      if (!a.expiration_date && !b.expiration_date) return 0;
+      if (!a.expiration_date) return 1;
+      if (!b.expiration_date) return -1;
       const diff =
         new Date(a.expiration_date).getTime() - new Date(b.expiration_date).getTime();
       return sortDirection === "asc" ? diff : -diff;
@@ -98,20 +106,25 @@ export default function EmailsPage() {
     {
       key: "expiration",
       header: "Expiration",
-      render: (e) => (
-        <div>
-          <p>{formatDate(e.expiration_date)}</p>
-          <p className="text-xs text-slate-400">
-            {daysRemainingLabel(getRenewalInfo(e.expiration_date).daysRemaining)}
-          </p>
-        </div>
-      ),
+      render: (e) =>
+        e.is_lifetime ? (
+          <p className="text-slate-500 dark:text-slate-400">Never expires</p>
+        ) : (
+          <div>
+            <p>{formatDate(e.expiration_date)}</p>
+            <p className="text-xs text-slate-400">
+              {daysRemainingLabel(getRenewalInfo(e.expiration_date!).daysRemaining)}
+            </p>
+          </div>
+        ),
     },
     {
       key: "auto_renewal",
       header: "Auto Renewal",
       render: (e) =>
-        e.auto_renewal ? (
+        e.is_lifetime ? (
+          <span className="text-slate-400">Lifetime</span>
+        ) : e.auto_renewal ? (
           <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
             <RefreshCw className="h-3.5 w-3.5" /> On
           </span>
@@ -122,12 +135,13 @@ export default function EmailsPage() {
     {
       key: "cost",
       header: "Annual Cost",
-      render: (e) => formatCurrency(e.annual_cost),
+      render: (e) => (e.is_lifetime ? formatEgp(e.lifetime_cost_egp) : formatCurrency(e.annual_cost)),
     },
     {
       key: "status",
       header: "Status",
-      render: (e) => <StatusBadge renewal={getRenewalInfo(e.expiration_date)} />,
+      render: (e) =>
+        e.is_lifetime ? <LifetimeBadge /> : <StatusBadge renewal={getRenewalInfo(e.expiration_date!)} />,
     },
     {
       key: "actions",
@@ -226,19 +240,27 @@ export default function EmailsPage() {
                       {e.provider} · {e.client_name ?? "Unassigned"}
                     </p>
                   </div>
-                  <StatusBadge renewal={getRenewalInfo(e.expiration_date)} />
+                  {e.is_lifetime ? (
+                    <LifetimeBadge />
+                  ) : (
+                    <StatusBadge renewal={getRenewalInfo(e.expiration_date!)} />
+                  )}
                 </div>
                 <div className="mt-3 flex items-center justify-between text-sm">
-                  <div>
-                    <p className="text-slate-900 dark:text-slate-100">
-                      {formatDate(e.expiration_date)}
-                    </p>
-                    <p className="text-xs text-slate-400">
-                      {daysRemainingLabel(getRenewalInfo(e.expiration_date).daysRemaining)}
-                    </p>
-                  </div>
+                  {e.is_lifetime ? (
+                    <p className="text-slate-900 dark:text-slate-100">Never expires</p>
+                  ) : (
+                    <div>
+                      <p className="text-slate-900 dark:text-slate-100">
+                        {formatDate(e.expiration_date)}
+                      </p>
+                      <p className="text-xs text-slate-400">
+                        {daysRemainingLabel(getRenewalInfo(e.expiration_date!).daysRemaining)}
+                      </p>
+                    </div>
+                  )}
                   <p className="font-medium text-slate-900 dark:text-slate-100">
-                    {formatCurrency(e.annual_cost)}/yr
+                    {e.is_lifetime ? formatEgp(e.lifetime_cost_egp) : `${formatCurrency(e.annual_cost)}/yr`}
                   </p>
                 </div>
                 <div className="mt-3 flex justify-end gap-1">

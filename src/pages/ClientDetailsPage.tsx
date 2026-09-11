@@ -18,6 +18,7 @@ import { PageTransition } from "@/components/shared/PageTransition";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { StatusBadge } from "@/components/shared/StatusBadge";
+import { LifetimeBadge } from "@/components/shared/LifetimeBadge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { ClientFormModal } from "@/components/clients/ClientFormModal";
@@ -31,7 +32,7 @@ import { deleteDomain, listDomainsByClient } from "@/services/domains.service";
 import { deleteHosting, listHostingByClient } from "@/services/hosting.service";
 import { deleteEmail, listEmailsByClient } from "@/services/emails.service";
 import { getRenewalInfo, formatDate } from "@/utils/dates";
-import { formatCurrency } from "@/utils/format";
+import { formatCurrency, formatEgp } from "@/utils/format";
 import type { ClientRow, DomainRow, HostingRow, EmailRow } from "@/types";
 
 export default function ClientDetailsPage() {
@@ -258,6 +259,8 @@ export default function ClientDetailsPage() {
                   subtitle={e.provider}
                   expirationDate={e.expiration_date}
                   annualCost={e.annual_cost}
+                  isLifetime={e.is_lifetime}
+                  lifetimeCostEgp={e.lifetime_cost_egp}
                   onEdit={() => setEmailModal({ open: true, row: e })}
                   onDelete={() => setDeleteTarget({ kind: "email", row: e })}
                 />
@@ -382,13 +385,17 @@ function ServiceRow({
   subtitle,
   expirationDate,
   annualCost,
+  isLifetime,
+  lifetimeCostEgp,
   onEdit,
   onDelete,
 }: {
   title: string;
   subtitle: string;
-  expirationDate: string;
+  expirationDate: string | null;
   annualCost: number;
+  isLifetime?: boolean;
+  lifetimeCostEgp?: number;
   onEdit: () => void;
   onDelete: () => void;
 }) {
@@ -400,10 +407,18 @@ function ServiceRow({
       </div>
       <div className="flex flex-wrap items-center gap-4 sm:gap-6">
         <div className="text-sm">
-          <p className="text-slate-700 dark:text-slate-300">{formatDate(expirationDate)}</p>
-          <p className="text-xs text-slate-400">{formatCurrency(annualCost)}/yr</p>
+          <p className="text-slate-700 dark:text-slate-300">
+            {isLifetime ? "Never expires" : formatDate(expirationDate)}
+          </p>
+          <p className="text-xs text-slate-400">
+            {isLifetime ? formatEgp(lifetimeCostEgp) : `${formatCurrency(annualCost)}/yr`}
+          </p>
         </div>
-        <StatusBadge renewal={getRenewalInfo(expirationDate)} />
+        {isLifetime ? (
+          <LifetimeBadge />
+        ) : (
+          <StatusBadge renewal={getRenewalInfo(expirationDate!)} />
+        )}
         <div className="flex items-center gap-1">
           <Button size="icon" variant="ghost" aria-label="Edit" onClick={onEdit}>
             <Pencil className="h-4 w-4" />

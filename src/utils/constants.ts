@@ -7,6 +7,8 @@ export const DOMAIN_PROVIDERS: DomainProvider[] = [
   "Hostinger",
   "GoDaddy",
   "Namecheap",
+  "HostGator",
+  "Bluehost",
   "Cloudflare",
   "Other",
 ];
@@ -17,14 +19,15 @@ export const HOSTING_PROVIDERS: HostingProvider[] = [
   "Namecheap",
   "HostGator",
   "Bluehost",
+  "Cloudflare",
   "Other",
 ];
 
 export const EMAIL_PROVIDERS: EmailProvider[] = [
-  "Google Workspace",
-  "Microsoft 365",
   "Zoho Mail",
   "Hostinger Email",
+  "Google Workspace",
+  "Microsoft 365",
   "Other",
 ];
 

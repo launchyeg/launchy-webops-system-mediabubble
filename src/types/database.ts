@@ -16,6 +16,8 @@ export type DomainProvider =
   | "Hostinger"
   | "GoDaddy"
   | "Namecheap"
+  | "HostGator"
+  | "Bluehost"
   | "Cloudflare"
   | "Other";
 
@@ -25,13 +27,14 @@ export type HostingProvider =
   | "Namecheap"
   | "HostGator"
   | "Bluehost"
+  | "Cloudflare"
   | "Other";
 
 export type EmailProvider =
-  | "Google Workspace"
-  | "Microsoft 365"
   | "Zoho Mail"
   | "Hostinger Email"
+  | "Google Workspace"
+  | "Microsoft 365"
   | "Other";
 
 // Note: these are declared with `type`, not `interface`. @supabase/postgrest-js
@@ -66,6 +69,10 @@ export type DomainRow = {
   auto_renewal: boolean;
   account_email: string | null;
   annual_cost: number;
+  /** The company's commission for managing this domain, in USD. Purely
+   * informational — displayed as the final price sent to the client
+   * (annual_cost + commission_usd); nothing derives logic from it. */
+  commission_usd: number;
   notes: string | null;
   created_at: string;
   updated_at: string;
@@ -84,24 +91,74 @@ export type HostingRow = {
   auto_renewal: boolean;
   account_email: string | null;
   annual_cost: number;
+  /** The company's commission for managing this hosting account, in USD.
+   * Purely informational — displayed as the final price sent to the client
+   * (annual_cost + commission_usd); nothing derives logic from it. */
+  commission_usd: number;
   notes: string | null;
   created_at: string;
   updated_at: string;
 };
 
-export type HostingInsert = Omit<HostingRow, "id" | "created_at" | "updated_at">;
+export type HostingInsert = Omit<
+  HostingRow,
+  "id" | "created_at" | "updated_at"
+>;
 export type HostingUpdate = Partial<HostingInsert>;
+
+/** One link row in the hosting_domains join table — a hosting account can
+ * link to any number of the same client's domains (a shared hosting
+ * account often serves several), edited as a repeatable "+ Add Domain"
+ * list in the Add/Edit Hosting form. */
+export type HostingDomainRow = {
+  id: string;
+  hosting_id: string;
+  domain_id: string;
+  created_at: string;
+};
+
+export type HostingDomainInsert = Omit<HostingDomainRow, "id" | "created_at">;
+
+/** One mailbox created under an email service account (e.g. a single
+ * user@client.com inbox under a Google Workspace subscription). Stored as a
+ * JSON array on the parent EmailRow since a service account can hold any
+ * number of these, entered/edited together as a repeatable field group. */
+export type EmailMailbox = {
+  email: string;
+  password: string;
+  storage: string;
+};
 
 export type EmailRow = {
   id: string;
   client_id: string | null;
+  /** Links this email service to one of the same client's domains, used
+   * purely by the Add/Edit Email form to auto-append "@<domain>" while
+   * typing mailbox local parts. Nothing else in the app reads it. */
+  domain_id: string | null;
   provider: string;
   email_account: string;
   status: ServiceStatus;
-  expiration_date: string;
+  /** Null only when is_lifetime is true — a lifetime email service was paid
+   * for once and never expires, so it has no renewal date. */
+  expiration_date: string | null;
+  /** True for a one-time purchase with no expiration_date; its cost lives
+   * in lifetime_cost_egp instead of annual_cost, and it's excluded from all
+   * renewal tracking and from the USD annual-cost dashboard totals. */
+  is_lifetime: boolean;
   auto_renewal: boolean;
   account_email: string | null;
+  /** "Email Cost": the recurring annual cost in USD. Used only when
+   * is_lifetime is false (0 for lifetime rows). */
   annual_cost: number;
+  /** The company's commission for managing this email service, in USD.
+   * Purely informational — displayed as the final price sent to the client
+   * (annual_cost + commission_usd). Used only when is_lifetime is false. */
+  commission_usd: number;
+  /** The one-time cost for a lifetime purchase, entered directly in EGP.
+   * Used only when is_lifetime is true. */
+  lifetime_cost_egp: number;
+  mailboxes: EmailMailbox[];
   notes: string | null;
   created_at: string;
   updated_at: string;
@@ -142,6 +199,12 @@ export type Database = {
         Row: HostingRow;
         Insert: HostingInsert;
         Update: HostingUpdate;
+        Relationships: [];
+      };
+      hosting_domains: {
+        Row: HostingDomainRow;
+        Insert: HostingDomainInsert;
+        Update: Partial<HostingDomainInsert>;
         Relationships: [];
       };
       emails: {

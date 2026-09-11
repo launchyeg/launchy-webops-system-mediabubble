@@ -1,7 +1,7 @@
 import { type FormEvent, useState } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Boxes, Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -38,14 +38,16 @@ export default function LoginPage() {
         className="w-full max-w-sm"
       >
         <div className="mb-8 flex flex-col items-center text-center">
-          <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-600 text-white shadow-card">
-            <Boxes className="h-6 w-6" />
-          </div>
+          <img
+            src="/bgfavicon.svg"
+            alt="mediaBubble"
+            className="h-12 w-12 rounded-xl mb-4"
+          />
           <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">
             mediaBubble OPS
           </h1>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            Sign in to manage clients &amp; services
+            Sign in to manage clients &amp; software services
           </p>
         </div>
 

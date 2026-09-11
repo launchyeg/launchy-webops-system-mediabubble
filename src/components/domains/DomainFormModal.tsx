@@ -10,6 +10,8 @@ import { useToast } from "@/contexts/ToastContext";
 import { createDomain, updateDomain } from "@/services/domains.service";
 import { getRenewalInfo, renewalTierToServiceStatus } from "@/utils/dates";
 import { DOMAIN_PROVIDERS } from "@/utils/constants";
+import { useUsdToEgpRate } from "@/hooks/useUsdToEgpRate";
+import { formatCurrency, formatEgp } from "@/utils/format";
 import type { ClientRow, DomainWithClient } from "@/types";
 
 interface DomainFormModalProps {
@@ -28,6 +30,7 @@ const EMPTY_FORM = {
   auto_renewal: false,
   account_email: "",
   annual_cost: "",
+  commission_usd: "",
   client_id: "",
   notes: "",
 };
@@ -44,6 +47,11 @@ export function DomainFormModal({
   const [form, setForm] = useState(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
   const isEdit = Boolean(domain);
+  const { rate: egpRate } = useUsdToEgpRate();
+
+  const annualCostUsd = Number(form.annual_cost) || 0;
+  const commissionUsd = Number(form.commission_usd) || 0;
+  const finalPriceUsd = annualCostUsd + commissionUsd;
 
   useEffect(() => {
     if (!open) return;
@@ -56,6 +64,7 @@ export function DomainFormModal({
             auto_renewal: domain.auto_renewal,
             account_email: domain.account_email ?? "",
             annual_cost: String(domain.annual_cost ?? ""),
+            commission_usd: String(domain.commission_usd ?? ""),
             client_id: domain.client_id ?? "",
             notes: domain.notes ?? "",
           }
@@ -79,6 +88,7 @@ export function DomainFormModal({
         auto_renewal: form.auto_renewal,
         account_email: form.account_email.trim() || null,
         annual_cost: Number(form.annual_cost) || 0,
+        commission_usd: Number(form.commission_usd) || 0,
         client_id: form.client_id,
         notes: form.notes.trim() || null,
         status: renewalTierToServiceStatus(tier),
@@ -152,6 +162,40 @@ export function DomainFormModal({
             value={form.annual_cost}
             onChange={(e) => setForm((f) => ({ ...f, annual_cost: e.target.value }))}
           />
+        </div>
+        <Input
+          label="Commission (USD)"
+          type="number"
+          min="0"
+          step="0.01"
+          hint="Your company's fee for managing this domain, on top of the annual cost."
+          value={form.commission_usd}
+          onChange={(e) => setForm((f) => ({ ...f, commission_usd: e.target.value }))}
+        />
+        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 dark:border-slate-800 dark:bg-slate-800/50">
+          <p className="text-xs font-medium text-slate-400">
+            Final Price to Client
+          </p>
+          <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+            {formatCurrency(finalPriceUsd)}
+            {egpRate !== null && (
+              <span className="ml-1.5 font-normal text-slate-500 dark:text-slate-400">
+                (≈ {formatEgp(finalPriceUsd * egpRate)})
+              </span>
+            )}
+          </p>
+          {egpRate !== null && (
+            <dl className="mt-1.5 space-y-0.5 border-t border-slate-200 pt-1.5 text-xs text-slate-500 dark:border-slate-700 dark:text-slate-400">
+              <div className="flex justify-between gap-2">
+                <dt>Domain price</dt>
+                <dd>{formatEgp(annualCostUsd * egpRate)}</dd>
+              </div>
+              <div className="flex justify-between gap-2">
+                <dt>Commission</dt>
+                <dd>{formatEgp(commissionUsd * egpRate)}</dd>
+              </div>
+            </dl>
+          )}
         </div>
         <Input
           label="Domain Account Email"

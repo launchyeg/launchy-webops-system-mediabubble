@@ -15,11 +15,12 @@ import { SearchInput } from "@/components/ui/SearchInput";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { TableSkeleton } from "@/components/ui/Skeleton";
 import { StatusBadge } from "@/components/shared/StatusBadge";
+import { LifetimeBadge } from "@/components/shared/LifetimeBadge";
 import { ClientStatusBadge } from "@/components/clients/ClientStatusBadge";
 import { useClientOverview, type ClientOverviewGroup } from "@/hooks/useClientOverview";
 import { useDebounce } from "@/hooks/useDebounce";
 import { getRenewalInfo, formatDate } from "@/utils/dates";
-import { formatCurrency } from "@/utils/format";
+import { formatCurrency, formatEgp } from "@/utils/format";
 import { cn } from "@/lib/utils";
 import type { DomainWithClient, HostingWithClient, EmailWithClient } from "@/types";
 
@@ -245,6 +246,7 @@ function DetailRow({
 }) {
   const name =
     "domain_name" in data ? data.domain_name : "account_name" in data ? data.account_name : data.email_account;
+  const isLifetime = "is_lifetime" in data && data.is_lifetime;
 
   return (
     <div className="flex flex-col gap-2 px-5 py-3 pl-12 sm:flex-row sm:items-center sm:justify-between">
@@ -261,10 +263,20 @@ function DetailRow({
       </div>
       <div className="flex items-center gap-4 pl-6 sm:gap-6 sm:pl-0">
         <div className="text-sm">
-          <p className="text-slate-700 dark:text-slate-300">{formatDate(data.expiration_date)}</p>
-          <p className="text-xs text-slate-400">{formatCurrency(data.annual_cost)}/yr</p>
+          <p className="text-slate-700 dark:text-slate-300">
+            {isLifetime ? "Never expires" : formatDate(data.expiration_date)}
+          </p>
+          <p className="text-xs text-slate-400">
+            {isLifetime
+              ? formatEgp("lifetime_cost_egp" in data ? data.lifetime_cost_egp : 0)
+              : `${formatCurrency(data.annual_cost)}/yr`}
+          </p>
         </div>
-        <StatusBadge renewal={getRenewalInfo(data.expiration_date)} />
+        {isLifetime ? (
+          <LifetimeBadge />
+        ) : (
+          <StatusBadge renewal={getRenewalInfo(data.expiration_date!)} />
+        )}
       </div>
     </div>
   );

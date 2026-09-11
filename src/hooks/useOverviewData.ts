@@ -48,11 +48,14 @@ export function useOverviewData() {
   };
 
   const bucketStats = (
-    rows: { expiration_date: string }[]
+    rows: { expiration_date: string | null }[]
   ): ServiceBucketStats => {
     let expiringSoon = 0;
     let expired = 0;
     for (const row of rows) {
+      // A lifetime email has no expiration_date and never expires — it
+      // still counts toward `total`, just never toward the urgency buckets.
+      if (!row.expiration_date) continue;
       const { tier } = getRenewalInfo(row.expiration_date);
       if (tier === "expired") expired += 1;
       else if (tier !== "active") expiringSoon += 1;
@@ -78,6 +81,7 @@ export function useOverviewData() {
       expired: 0,
     };
     for (const date of all) {
+      if (!date) continue; // lifetime email — never expires
       const { daysRemaining } = getRenewalInfo(date);
       if (daysRemaining < 0) stats.expired += 1;
       else {
@@ -116,6 +120,7 @@ export function useOverviewData() {
     let upcomingRenewalExpense = 0;
     let servicesNeedingRenewal = 0;
     for (const row of allWithCost) {
+      if (!row.expiration_date) continue; // lifetime email — never renews
       const { daysRemaining } = getRenewalInfo(row.expiration_date);
       if (daysRemaining <= 30) {
         upcomingRenewalExpense += row.annual_cost ?? 0;
@@ -155,16 +160,20 @@ export function useOverviewData() {
         annualCost: h.annual_cost,
         renewal: getRenewalInfo(h.expiration_date),
       })),
-      ...emails.emails.map((e) => ({
-        id: e.id,
-        kind: "email" as const,
-        clientName: e.client_name ?? "Unassigned",
-        serviceName: e.email_account,
-        provider: e.provider,
-        expirationDate: e.expiration_date,
-        annualCost: e.annual_cost,
-        renewal: getRenewalInfo(e.expiration_date),
-      })),
+      // Lifetime emails have no expiration_date and never renew, so they're
+      // excluded from this list entirely rather than given a fake date.
+      ...emails.emails
+        .filter((e) => e.expiration_date !== null)
+        .map((e) => ({
+          id: e.id,
+          kind: "email" as const,
+          clientName: e.client_name ?? "Unassigned",
+          serviceName: e.email_account,
+          provider: e.provider,
+          expirationDate: e.expiration_date!,
+          annualCost: e.annual_cost,
+          renewal: getRenewalInfo(e.expiration_date!),
+        })),
     ];
 
     return rows.sort(

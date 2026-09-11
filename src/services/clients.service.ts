@@ -24,7 +24,10 @@ export async function listClients(): Promise<ClientWithCounts[]> {
   if (hosting.error) throw hosting.error;
   if (emails.error) throw emails.error;
 
-  type Row = { client_id: string | null; expiration_date: string };
+  // expiration_date is null only for a lifetime email (paid once, never
+  // expires) — it still counts toward that client's service counts below,
+  // just never toward their worst renewal tier.
+  type Row = { client_id: string | null; expiration_date: string | null };
   const allRows: Row[] = [
     ...(domains.data ?? []),
     ...(hosting.data ?? []),
@@ -37,7 +40,12 @@ export async function listClients(): Promise<ClientWithCounts[]> {
   const worstTierForClient = (id: string): RenewalTier | null => {
     const rows = allRows.filter((r) => r.client_id === id);
     if (rows.length === 0) return null;
+    // A lifetime email (null expiration_date) never contributes to the
+    // worst tier, but its mere presence still means this client has at
+    // least an "active" service, not "no services" — hence the "active"
+    // starting point below rather than reusing rows.length === 0.
     return rows.reduce<RenewalTier>((worst, row) => {
+      if (row.expiration_date === null) return worst;
       const tier = getRenewalInfo(row.expiration_date).tier;
       return TIER_SEVERITY[tier] > TIER_SEVERITY[worst] ? tier : worst;
     }, "active");

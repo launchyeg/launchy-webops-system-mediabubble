@@ -82,11 +82,19 @@ export function useClientOverview() {
       ];
       g.serviceCount = rows.length;
       g.totalAnnualCost = rows.reduce((sum, r) => sum + (r.annual_cost ?? 0), 0);
-      g.worstTier = rows.reduce<RenewalTier | null>((worst, r) => {
-        const tier = getRenewalInfo(r.expiration_date).tier;
-        if (!worst || TIER_SEVERITY[tier] > TIER_SEVERITY[worst]) return tier;
-        return worst;
-      }, null);
+      // A lifetime email (null expiration_date) never contributes to the
+      // worst tier, but its mere presence still means this client has at
+      // least an "active" service, not "no services" — hence starting the
+      // reduce at "active" whenever there's at least one row, rather than
+      // starting at null and leaving it null for an all-lifetime client.
+      g.worstTier =
+        rows.length === 0
+          ? null
+          : rows.reduce<RenewalTier>((worst, r) => {
+              if (!r.expiration_date) return worst;
+              const tier = getRenewalInfo(r.expiration_date).tier;
+              return TIER_SEVERITY[tier] > TIER_SEVERITY[worst] ? tier : worst;
+            }, "active");
     };
 
     const clientGroups = Array.from(byClientId.values());

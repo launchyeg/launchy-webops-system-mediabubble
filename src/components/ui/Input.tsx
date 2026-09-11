@@ -5,10 +5,13 @@ interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   label?: string;
   error?: string;
   hint?: string;
+  /** A fixed, non-editable chip glued to the input's trailing edge (e.g.
+   * "@example.com" after a local-part-only email input). */
+  suffix?: string;
 }
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ className, label, error, hint, id, ...props }, ref) => {
+  ({ className, label, error, hint, suffix, id, ...props }, ref) => {
     const inputId = id ?? props.name;
     return (
       <div className="flex flex-col gap-1.5">
@@ -21,18 +24,29 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             {props.required && <span className="text-red-500"> *</span>}
           </label>
         )}
-        <input
-          ref={ref}
-          id={inputId}
-          className={cn(
-            "h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400 transition-colors",
-            "focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20",
-            "dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500",
-            error && "border-red-400 focus:border-red-500 focus:ring-red-500/20",
-            className
+        <div className="flex">
+          <input
+            ref={ref}
+            id={inputId}
+            className={cn(
+              "h-10 w-full min-w-0 flex-1 border border-slate-300 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400 transition-colors",
+              suffix ? "rounded-l-lg border-r-0" : "rounded-lg",
+              "focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20",
+              "dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500",
+              error && "border-red-400 focus:border-red-500 focus:ring-red-500/20",
+              className
+            )}
+            {...props}
+          />
+          {suffix && (
+            <span
+              title={suffix}
+              className="inline-flex max-w-[45%] shrink-0 items-center truncate rounded-r-lg border border-l-0 border-slate-300 bg-slate-100 px-3 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400"
+            >
+              {suffix}
+            </span>
           )}
-          {...props}
-        />
+        </div>
         {hint && !error && (
           <p className="text-xs text-slate-500 dark:text-slate-400">{hint}</p>
         )}

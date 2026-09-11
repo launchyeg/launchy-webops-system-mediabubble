@@ -103,6 +103,10 @@ create table if not exists domains (
   auto_renewal boolean not null default false,
   account_email text,
   annual_cost numeric(10, 2) not null default 0,
+  -- The company's commission for managing this domain, in USD. Purely
+  -- informational — shown in the UI next to annual_cost as the final price
+  -- sent to the client; nothing in the app derives logic from it.
+  commission_usd numeric(10, 2) not null default 0,
   notes text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -130,6 +134,10 @@ create table if not exists hosting (
   auto_renewal boolean not null default false,
   account_email text,
   annual_cost numeric(10, 2) not null default 0,
+  -- The company's commission for managing this hosting account, in USD.
+  -- Purely informational — shown in the UI next to annual_cost as the final
+  -- price sent to the client; nothing in the app derives logic from it.
+  commission_usd numeric(10, 2) not null default 0,
   notes text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -145,18 +153,66 @@ create index if not exists hosting_expiration_date_idx on hosting (expiration_da
 create index if not exists hosting_status_idx on hosting (status);
 
 -- ============================================================================
+-- hosting_domains
+-- Join table linking one hosting account to any number of the same
+-- client's domains (a shared hosting account often serves several
+-- domains) — edited as a repeatable "+ Add Domain" list in the Add/Edit
+-- Hosting form. Both FKs cascade: deleting the hosting account or the
+-- domain just removes the link row, never blocks the delete.
+-- ============================================================================
+create table if not exists hosting_domains (
+  id uuid primary key default gen_random_uuid(),
+  hosting_id uuid not null references hosting (id) on delete cascade,
+  domain_id uuid not null references domains (id) on delete cascade,
+  created_at timestamptz not null default now(),
+  unique (hosting_id, domain_id)
+);
+
+create index if not exists hosting_domains_hosting_id_idx on hosting_domains (hosting_id);
+create index if not exists hosting_domains_domain_id_idx on hosting_domains (domain_id);
+
+-- ============================================================================
 -- emails
 -- ============================================================================
 create table if not exists emails (
   id uuid primary key default gen_random_uuid(),
   client_id uuid references clients (id) on delete set null,
+  -- Links this email service to one of the same client's domains, used
+  -- purely by the Add/Edit Email form to auto-append "@<domain>" while
+  -- typing mailbox local parts. Nothing else in the app reads it.
+  domain_id uuid references domains (id) on delete set null,
   provider text not null,
   email_account text not null,
   status text not null default 'active' check (status in ('active', 'expiring_soon', 'expired')),
-  expiration_date date not null,
+  -- Null only when is_lifetime is true — a lifetime email service was paid
+  -- for once and never expires, so it has no renewal date.
+  expiration_date date,
+  -- When true, this was a one-time purchase (no expiration_date); its cost
+  -- lives in lifetime_cost_egp instead of annual_cost, and it's excluded
+  -- from all renewal tracking and from the USD annual-cost dashboard totals.
+  is_lifetime boolean not null default false,
   auto_renewal boolean not null default false,
   account_email text,
+  -- "Email Cost": the recurring annual cost in USD. Used only when
+  -- is_lifetime is false (0 for lifetime rows).
   annual_cost numeric(10, 2) not null default 0,
+  -- The company's commission for managing this email service, in USD.
+  -- Purely informational — shown next to annual_cost as the final price
+  -- sent to the client. Used only when is_lifetime is false.
+  commission_usd numeric(10, 2) not null default 0,
+  -- The one-time cost for a lifetime purchase, entered directly in EGP.
+  -- Used only when is_lifetime is true.
+  lifetime_cost_egp numeric(10, 2) not null default 0,
+  check (
+    (is_lifetime and expiration_date is null)
+    or (not is_lifetime and expiration_date is not null)
+  ),
+  -- The individual mailboxes created under this account (e.g. each
+  -- user@client.com inbox under a Google Workspace subscription), as a JSON
+  -- array of { email, password, storage }. Edited together with the parent
+  -- record; never queried on its own, so a JSONB column rather than a
+  -- child table.
+  mailboxes jsonb not null default '[]'::jsonb,
   notes text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -168,6 +224,7 @@ create trigger emails_set_updated_at
   for each row execute procedure set_updated_at();
 
 create index if not exists emails_client_id_idx on emails (client_id);
+create index if not exists emails_domain_id_idx on emails (domain_id);
 create index if not exists emails_expiration_date_idx on emails (expiration_date);
 create index if not exists emails_status_idx on emails (status);
 
@@ -182,6 +239,7 @@ create index if not exists emails_status_idx on emails (status);
 alter table clients enable row level security;
 alter table domains enable row level security;
 alter table hosting enable row level security;
+alter table hosting_domains enable row level security;
 alter table emails enable row level security;
 
 drop policy if exists "Authenticated users can read clients" on clients;
@@ -222,6 +280,19 @@ create policy "Authenticated users can update hosting"
 drop policy if exists "Authenticated users can delete hosting" on hosting;
 create policy "Authenticated users can delete hosting"
   on hosting for delete using (auth.role() = 'authenticated');
+
+drop policy if exists "Authenticated users can read hosting_domains" on hosting_domains;
+create policy "Authenticated users can read hosting_domains"
+  on hosting_domains for select using (auth.role() = 'authenticated');
+drop policy if exists "Authenticated users can insert hosting_domains" on hosting_domains;
+create policy "Authenticated users can insert hosting_domains"
+  on hosting_domains for insert with check (auth.role() = 'authenticated');
+drop policy if exists "Authenticated users can update hosting_domains" on hosting_domains;
+create policy "Authenticated users can update hosting_domains"
+  on hosting_domains for update using (auth.role() = 'authenticated');
+drop policy if exists "Authenticated users can delete hosting_domains" on hosting_domains;
+create policy "Authenticated users can delete hosting_domains"
+  on hosting_domains for delete using (auth.role() = 'authenticated');
 
 drop policy if exists "Authenticated users can read emails" on emails;
 create policy "Authenticated users can read emails"
