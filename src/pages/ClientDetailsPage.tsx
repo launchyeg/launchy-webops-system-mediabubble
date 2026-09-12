@@ -34,6 +34,7 @@ import { deleteHosting, listHostingByClient } from "@/services/hosting.service";
 import { deleteEmail, listEmailsByClient } from "@/services/emails.service";
 import { getRenewalInfo, formatDate } from "@/utils/dates";
 import { formatCurrency, formatEgp } from "@/utils/format";
+import { applyDiscount } from "@/utils/pricing";
 import { cn } from "@/lib/utils";
 import type {
   ClientRow,
@@ -226,7 +227,7 @@ export default function ClientDetailsPage() {
                   subtitle={d.provider}
                   expirationDate={d.expiration_date}
                   annualCost={d.annual_cost}
-                  commissionUsd={d.commission_usd}
+                  commissionUsd={applyDiscount(d.commission_usd, d.discount_percent)}
                   extra={
                     <>
                       {d.account_email && <p className="text-xs text-slate-400">{d.account_email}</p>}

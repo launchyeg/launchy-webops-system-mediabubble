@@ -103,10 +103,14 @@ create table if not exists domains (
   auto_renewal boolean not null default false,
   account_email text,
   annual_cost numeric(10, 2) not null default 0,
-  -- The company's commission for managing this domain, in USD. Purely
-  -- informational — shown in the UI next to annual_cost as the final price
-  -- sent to the client; nothing in the app derives logic from it.
+  -- The company's commission for managing this domain, in USD (the gross
+  -- amount, before discount_percent below is applied).
   commission_usd numeric(10, 2) not null default 0,
+  -- A percentage deducted from commission_usd only (never from
+  -- annual_cost or the total) — applied live wherever the Final Price is
+  -- computed, both in the form and elsewhere it's displayed.
+  discount_percent numeric(5, 2) not null default 0
+    check (discount_percent >= 0 and discount_percent <= 100),
   notes text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()

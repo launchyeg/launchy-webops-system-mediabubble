@@ -12,6 +12,7 @@ import { getRenewalInfo, renewalTierToServiceStatus } from "@/utils/dates";
 import { DOMAIN_PROVIDERS } from "@/utils/constants";
 import { useUsdToEgpRate } from "@/hooks/useUsdToEgpRate";
 import { formatCurrency, formatEgp } from "@/utils/format";
+import { applyDiscount } from "@/utils/pricing";
 import type { ClientRow, DomainWithClient } from "@/types";
 
 interface DomainFormModalProps {
@@ -31,6 +32,7 @@ const EMPTY_FORM = {
   account_email: "",
   annual_cost: "",
   commission_usd: "",
+  discount_percent: "",
   client_id: "",
   notes: "",
 };
@@ -51,7 +53,10 @@ export function DomainFormModal({
 
   const annualCostUsd = Number(form.annual_cost) || 0;
   const commissionUsd = Number(form.commission_usd) || 0;
-  const finalPriceUsd = annualCostUsd + commissionUsd;
+  const discountPercent = Math.min(100, Math.max(0, Number(form.discount_percent) || 0));
+  const discountAmountUsd = commissionUsd - applyDiscount(commissionUsd, discountPercent);
+  const netCommissionUsd = commissionUsd - discountAmountUsd;
+  const finalPriceUsd = annualCostUsd + netCommissionUsd;
 
   useEffect(() => {
     if (!open) return;
@@ -65,6 +70,7 @@ export function DomainFormModal({
             account_email: domain.account_email ?? "",
             annual_cost: String(domain.annual_cost ?? ""),
             commission_usd: String(domain.commission_usd ?? ""),
+            discount_percent: String(domain.discount_percent ?? ""),
             client_id: domain.client_id ?? "",
             notes: domain.notes ?? "",
           }
@@ -89,6 +95,7 @@ export function DomainFormModal({
         account_email: form.account_email.trim() || null,
         annual_cost: Number(form.annual_cost) || 0,
         commission_usd: Number(form.commission_usd) || 0,
+        discount_percent: discountPercent,
         client_id: form.client_id,
         notes: form.notes.trim() || null,
         status: renewalTierToServiceStatus(tier),
@@ -178,17 +185,39 @@ export function DomainFormModal({
             }
           />
         </div>
-        <Input
-          label="Commission (USD)"
-          type="number"
-          min="0"
-          step="0.01"
-          hint="Your company's fee for managing this domain, on top of the annual cost."
-          value={form.commission_usd}
-          onChange={(e) =>
-            setForm((f) => ({ ...f, commission_usd: e.target.value }))
-          }
-        />
+        <div className="grid grid-cols-[1fr_auto] gap-4">
+          <Input
+            label="Commission (USD)"
+            type="number"
+            min="0"
+            step="0.01"
+            hint="Your company's fee for managing this domain, on top of the annual cost."
+            value={form.commission_usd}
+            onChange={(e) =>
+              setForm((f) => ({ ...f, commission_usd: e.target.value }))
+            }
+          />
+          <Input
+            label="Discount (%)"
+            type="number"
+            min="0"
+            max="100"
+            step="0.01"
+            className="w-24"
+            hint="Off the commission only."
+            value={form.discount_percent}
+            onChange={(e) => {
+              const raw = e.target.value;
+              // Clamp to [0, 100] as soon as it's out of range, rather than
+              // only relying on native form validation at submit time —
+              // otherwise the live preview below could briefly show a
+              // negative discount amount while typing.
+              const clamped =
+                raw === "" ? "" : String(Math.min(100, Math.max(0, Number(raw))));
+              setForm((f) => ({ ...f, discount_percent: clamped }));
+            }}
+          />
+        </div>
         <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 dark:border-slate-800 dark:bg-slate-800/50">
           <p className="text-xs font-medium text-slate-400">
             Final Price to Client
@@ -211,6 +240,12 @@ export function DomainFormModal({
                 <dt>Commission</dt>
                 <dd>{formatEgp(commissionUsd * egpRate)}</dd>
               </div>
+              {discountPercent > 0 && (
+                <div className="flex justify-between gap-2 text-emerald-600 dark:text-emerald-400">
+                  <dt>Discount ({discountPercent}%)</dt>
+                  <dd>-{formatEgp(discountAmountUsd * egpRate)}</dd>
+                </div>
+              )}
             </dl>
           )}
         </div>

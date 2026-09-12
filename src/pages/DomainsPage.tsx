@@ -15,6 +15,7 @@ import { useToast } from "@/contexts/ToastContext";
 import { deleteDomain } from "@/services/domains.service";
 import { getRenewalInfo, formatDate, daysRemainingLabel } from "@/utils/dates";
 import { formatCurrency } from "@/utils/format";
+import { applyDiscount } from "@/utils/pricing";
 import { DOMAIN_PROVIDERS } from "@/utils/constants";
 import type { DomainWithClient } from "@/types";
 
@@ -129,7 +130,8 @@ export default function DomainsPage() {
     {
       key: "cost",
       header: "Final Price",
-      render: (d) => `${formatCurrency(d.annual_cost + d.commission_usd)}/yr`,
+      render: (d) =>
+        `${formatCurrency(d.annual_cost + applyDiscount(d.commission_usd, d.discount_percent))}/yr`,
     },
     {
       key: "status",
@@ -247,7 +249,7 @@ export default function DomainsPage() {
                     </p>
                   </div>
                   <p className="font-medium text-slate-900 dark:text-slate-100">
-                    {formatCurrency(d.annual_cost + d.commission_usd)}/yr
+                    {formatCurrency(d.annual_cost + applyDiscount(d.commission_usd, d.discount_percent))}/yr
                   </p>
                 </div>
                 <div className="mt-3 flex justify-end gap-1">

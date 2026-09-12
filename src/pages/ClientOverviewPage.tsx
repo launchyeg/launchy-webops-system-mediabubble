@@ -22,6 +22,7 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { useUsdToEgpRate } from "@/hooks/useUsdToEgpRate";
 import { getRenewalInfo, formatDate } from "@/utils/dates";
 import { formatCurrency, formatEgp } from "@/utils/format";
+import { applyDiscount } from "@/utils/pricing";
 import { cn } from "@/lib/utils";
 import type { DomainWithClient, HostingWithClient, EmailWithClient } from "@/types";
 
@@ -328,7 +329,11 @@ function DetailRow({
     priceText = `${formatEgp(egpCost)}${suffix}`;
     if (egpRate !== null) convertedText = `${formatCurrency(egpCost / egpRate)}${suffix}`;
   } else {
-    const usd = data.annual_cost + data.commission_usd;
+    // Only a domain carries a discount — applied to its commission only.
+    const commission = "discount_percent" in data
+      ? applyDiscount(data.commission_usd, data.discount_percent)
+      : data.commission_usd;
+    const usd = data.annual_cost + commission;
     priceText = `${formatCurrency(usd)}${suffix}`;
     if (egpRate !== null) convertedText = `${formatEgp(usd * egpRate)}${suffix}`;
   }

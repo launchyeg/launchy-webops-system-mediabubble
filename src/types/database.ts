@@ -69,10 +69,13 @@ export type DomainRow = {
   auto_renewal: boolean;
   account_email: string | null;
   annual_cost: number;
-  /** The company's commission for managing this domain, in USD. Purely
-   * informational — displayed as the final price sent to the client
-   * (annual_cost + commission_usd); nothing derives logic from it. */
+  /** The company's commission for managing this domain, in USD — the gross
+   * amount, before discount_percent is applied. */
   commission_usd: number;
+  /** A percentage deducted from commission_usd only (never from
+   * annual_cost or the total) — applied live wherever the Final Price
+   * (annual_cost + discounted commission) is computed. */
+  discount_percent: number;
   notes: string | null;
   created_at: string;
   updated_at: string;

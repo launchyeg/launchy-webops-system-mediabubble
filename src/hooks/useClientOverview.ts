@@ -4,6 +4,7 @@ import { useDomains } from "./useDomains";
 import { useHosting } from "./useHosting";
 import { useEmails } from "./useEmails";
 import { getRenewalInfo } from "@/utils/dates";
+import { applyDiscount } from "@/utils/pricing";
 import type {
   ClientWithCounts,
   DomainWithClient,
@@ -94,7 +95,10 @@ export function useClientOverview() {
       const recurringEmails = g.emails.filter((e) => !e.is_lifetime);
 
       g.totalAnnualCostUsd =
-        g.domains.reduce((sum, d) => sum + d.annual_cost + d.commission_usd, 0) +
+        g.domains.reduce(
+          (sum, d) => sum + d.annual_cost + applyDiscount(d.commission_usd, d.discount_percent),
+          0
+        ) +
         privateHosting.reduce((sum, h) => sum + h.annual_cost + h.commission_usd, 0) +
         recurringEmails.reduce((sum, e) => sum + e.annual_cost + e.commission_usd, 0);
 
