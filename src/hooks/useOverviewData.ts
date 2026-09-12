@@ -14,6 +14,8 @@ export interface ServiceBucketStats {
   total: number;
   expiringSoon: number; // <= 21 days, not expired
   expired: number;
+  /** Provider === "Unknown" — no real data was on hand for this row. */
+  unknown: number;
 }
 
 export interface RenewalWindowStats {
@@ -91,11 +93,13 @@ export function useOverviewData() {
   };
 
   const bucketStats = (
-    rows: { expiration_date: string | null }[]
+    rows: { expiration_date: string | null; provider: string }[]
   ): ServiceBucketStats => {
     let expiringSoon = 0;
     let expired = 0;
+    let unknown = 0;
     for (const row of rows) {
+      if (row.provider === "Unknown") unknown += 1;
       // A lifetime email has no expiration_date and never expires — it
       // still counts toward `total`, just never toward the urgency buckets.
       if (!row.expiration_date) continue;
@@ -103,7 +107,7 @@ export function useOverviewData() {
       if (tier === "expired") expired += 1;
       else if (tier !== "active") expiringSoon += 1;
     }
-    return { total: rows.length, expiringSoon, expired };
+    return { total: rows.length, expiringSoon, expired, unknown };
   };
 
   const domainStats = useMemo(() => bucketStats(domains.domains), [domains.domains]);

@@ -88,14 +88,14 @@ export default function OverviewPage() {
                   value={domainStats.total}
                   icon={Globe}
                   index={1}
-                  subtext={`${domainStats.expiringSoon} expiring soon · ${domainStats.expired} expired`}
+                  subtext={`${domainStats.expiringSoon} expiring soon · ${domainStats.expired} expired · ${domainStats.unknown} unknown`}
                 />
                 <StatCard
                   label="Total Hosting Accounts"
                   value={hostingStats.total}
                   icon={Server}
                   index={2}
-                  subtext={`${hostingStats.expiringSoon} expiring soon · ${hostingStats.expired} expired`}
+                  subtext={`${hostingStats.expiringSoon} expiring soon · ${hostingStats.expired} expired · ${hostingStats.unknown} unknown`}
                 />
                 <StatCard
                   label="Total Email Accounts"
