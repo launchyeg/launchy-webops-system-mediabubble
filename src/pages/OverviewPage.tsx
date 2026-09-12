@@ -35,12 +35,6 @@ const KIND_ICON = {
   email: Mail,
   shared_hosting: Share2,
 } as const;
-const KIND_LABEL = {
-  domain: "Domain",
-  hosting: "Hosting",
-  email: "Email",
-  shared_hosting: "Shared Hosting",
-} as const;
 const KIND_ROUTE = {
   domain: "/domains",
   hosting: "/hosting",
@@ -64,6 +58,11 @@ export default function OverviewPage() {
     egpRate,
   } = useOverviewData();
   const navigate = useNavigate();
+
+  // Same 30-day cutoff as "Upcoming Renewal Expenses (30d)" /
+  // "Services Requiring Renewal (30d)" above — the table below shows
+  // exactly the services that make up those two figures.
+  const dueSoon = upcomingRenewals.filter((r) => r.renewal.daysRemaining <= 30);
 
   return (
     <PageTransition>
@@ -163,79 +162,6 @@ export default function OverviewPage() {
                   icon={XCircle}
                   tone="red"
                   index={4}
-                />
-              </>
-            )}
-          </div>
-        </section>
-
-        {/* Secondary expenses */}
-        <section>
-          <SectionHeading
-            title="Secondary Expenses"
-            description="Annual infrastructure cost, kept simple"
-          />
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
-            {loading ? (
-              Array.from({ length: 5 }).map((_, i) => (
-                <StatCardSkeleton key={i} />
-              ))
-            ) : (
-              <>
-                <StatCard
-                  label="Annual Domain Cost"
-                  value={formatCurrency(financials.annualDomainCost)}
-                  icon={Globe}
-                  index={0}
-                />
-                <StatCard
-                  label="Annual Hosting Cost"
-                  value={formatCurrency(financials.annualHostingCost)}
-                  icon={Server}
-                  index={1}
-                />
-                <StatCard
-                  label="Annual Email Cost"
-                  value={formatCurrency(financials.annualEmailCost)}
-                  icon={Mail}
-                  index={2}
-                />
-                <StatCard
-                  label="Annual Shared Hosting Cost"
-                  value={formatCurrency(financials.annualSharedHostingCost)}
-                  icon={Share2}
-                  index={3}
-                />
-                <StatCard
-                  label="Total Annual Infrastructure Cost"
-                  value={formatCurrency(financials.totalAnnualCost)}
-                  icon={Wallet}
-                  tone="emerald"
-                  index={4}
-                />
-              </>
-            )}
-          </div>
-          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {loading ? (
-              <>
-                <StatCardSkeleton />
-                <StatCardSkeleton />
-              </>
-            ) : (
-              <>
-                <StatCard
-                  label="Upcoming Renewal Expenses (30d)"
-                  value={formatCurrency(financials.upcomingRenewalExpense)}
-                  icon={DollarSign}
-                  tone="amber"
-                  index={0}
-                />
-                <StatCard
-                  label="Services Requiring Renewal (30d)"
-                  value={financials.servicesNeedingRenewal}
-                  icon={CalendarClock}
-                  index={1}
                 />
               </>
             )}
@@ -391,18 +317,79 @@ export default function OverviewPage() {
           )}
         </section>
 
-        {/* Upcoming renewals table */}
+        {/* Secondary expenses */}
         <section>
-          <Card className="overflow-hidden">
-            <CardHeader>
-              <div>
-                <CardTitle>Upcoming Renewals</CardTitle>
-                <CardDescription>
-                  Closest expiration dates across all services
-                </CardDescription>
-              </div>
-            </CardHeader>
+          <SectionHeading
+            title="Secondary Expenses"
+            description="Annual infrastructure cost, kept simple"
+          />
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+            {loading ? (
+              Array.from({ length: 5 }).map((_, i) => (
+                <StatCardSkeleton key={i} />
+              ))
+            ) : (
+              <>
+                <StatCard
+                  label="Annual Domain Cost"
+                  value={formatCurrency(financials.annualDomainCost)}
+                  icon={Globe}
+                  index={0}
+                />
+                <StatCard
+                  label="Annual Hosting Cost"
+                  value={formatCurrency(financials.annualHostingCost)}
+                  icon={Server}
+                  index={1}
+                />
+                <StatCard
+                  label="Annual Email Cost"
+                  value={formatCurrency(financials.annualEmailCost)}
+                  icon={Mail}
+                  index={2}
+                />
+                <StatCard
+                  label="Annual Shared Hosting Cost"
+                  value={formatCurrency(financials.annualSharedHostingCost)}
+                  icon={Share2}
+                  index={3}
+                />
+                <StatCard
+                  label="Total Annual Cost"
+                  value={formatCurrency(financials.totalAnnualCost)}
+                  icon={Wallet}
+                  tone="emerald"
+                  index={4}
+                />
+              </>
+            )}
+          </div>
+          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            {loading ? (
+              <>
+                <StatCardSkeleton />
+                <StatCardSkeleton />
+              </>
+            ) : (
+              <>
+                <StatCard
+                  label="Upcoming Renewal Expenses (30d)"
+                  value={formatCurrency(financials.upcomingRenewalExpense)}
+                  icon={DollarSign}
+                  tone="amber"
+                  index={0}
+                />
+                <StatCard
+                  label="Services Requiring Renewal (30d)"
+                  value={financials.servicesNeedingRenewal}
+                  icon={CalendarClock}
+                  index={1}
+                />
+              </>
+            )}
+          </div>
 
+          <Card className="mt-4 overflow-hidden">
             {loading ? (
               <TableSkeleton cols={7} />
             ) : upcomingRenewals.length === 0 ? (
@@ -411,6 +398,12 @@ export default function OverviewPage() {
                 title="No services yet"
                 description="Add domains, hosting, or email services to see upcoming renewals here."
               />
+            ) : dueSoon.length === 0 ? (
+              <EmptyState
+                icon={CalendarClock}
+                title="Nothing due soon"
+                description="No services are due for renewal within the next 30 days."
+              />
             ) : (
               <>
                 <div className="hidden overflow-x-auto scrollbar-thin sm:block">
@@ -418,12 +411,13 @@ export default function OverviewPage() {
                     <thead>
                       <tr className="border-b border-slate-100 dark:border-slate-800">
                         {[
+                          "#",
                           "Client",
                           "Service",
                           "Provider",
                           "Expiration Date",
                           "Days Remaining",
-                          "Annual Cost",
+                          "Final Price",
                           "Status",
                         ].map((h) => (
                           <th
@@ -436,7 +430,7 @@ export default function OverviewPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {upcomingRenewals.slice(0, 15).map((r) => {
+                      {dueSoon.map((r, index) => {
                         const Icon = KIND_ICON[r.kind];
                         return (
                           <tr
@@ -444,6 +438,9 @@ export default function OverviewPage() {
                             onClick={() => navigate(KIND_ROUTE[r.kind])}
                             className="cursor-pointer border-b border-slate-50 last:border-0 transition-colors hover:bg-slate-50 dark:border-slate-800/60 dark:hover:bg-slate-800/40"
                           >
+                            <td className="px-5 py-3.5 text-slate-400">
+                              {index + 1}
+                            </td>
                             <td className="px-5 py-3.5 font-medium text-slate-900 dark:text-slate-100">
                               {r.clientName}
                             </td>
@@ -452,9 +449,6 @@ export default function OverviewPage() {
                                 <Icon className="h-4 w-4 shrink-0 text-slate-400" />
                                 <div>
                                   <p>{r.serviceName}</p>
-                                  <p className="text-xs text-slate-400">
-                                    {KIND_LABEL[r.kind]}
-                                  </p>
                                 </div>
                               </div>
                             </td>
@@ -477,7 +471,7 @@ export default function OverviewPage() {
                               {daysRemainingLabel(r.renewal.daysRemaining)}
                             </td>
                             <td className="px-5 py-3.5 text-slate-700 dark:text-slate-300">
-                              {formatCurrency(r.annualCost)}
+                              {formatCurrency(r.annualCost)}/yr
                             </td>
                             <td className="px-5 py-3.5">
                               <StatusBadge renewal={r.renewal} />
@@ -490,7 +484,7 @@ export default function OverviewPage() {
                 </div>
 
                 <div className="flex flex-col gap-3 p-4 sm:hidden">
-                  {upcomingRenewals.slice(0, 15).map((r) => {
+                  {dueSoon.map((r) => {
                     const Icon = KIND_ICON[r.kind];
                     return (
                       <div
@@ -541,7 +535,7 @@ export default function OverviewPage() {
               <div>
                 <CardTitle>Shared Hosting Usage</CardTitle>
                 <CardDescription>
-                  Which clients are on each shared plan, at a glance
+                  Renewal price for each shared hosting plan
                 </CardDescription>
               </div>
             </CardHeader>
@@ -561,11 +555,13 @@ export default function OverviewPage() {
                     <thead>
                       <tr className="border-b border-slate-100 dark:border-slate-800">
                         {[
-                          "Plan",
+                          "#",
+                          "Name",
                           "Provider",
                           "Expiration Date",
+                          "Days Remaining",
+                          "Final Price",
                           "Status",
-                          "Clients Using It",
                         ].map((h) => (
                           <th
                             key={h}
@@ -577,91 +573,92 @@ export default function OverviewPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {sharedHostingUsage.map(({ plan, clientNames }) => (
-                        <tr
-                          key={plan.id}
-                          onClick={() => navigate("/shared-hosting")}
-                          className="cursor-pointer border-b border-slate-50 last:border-0 transition-colors hover:bg-slate-50 dark:border-slate-800/60 dark:hover:bg-slate-800/40"
-                        >
-                          <td className="px-5 py-3.5 font-medium text-slate-900 dark:text-slate-100">
-                            {plan.name}
-                          </td>
-                          <td className="px-5 py-3.5 text-slate-700 dark:text-slate-300">
-                            {plan.provider}
-                          </td>
-                          <td className="px-5 py-3.5 text-slate-700 dark:text-slate-300">
-                            {formatDate(plan.expiration_date)}
-                          </td>
-                          <td className="px-5 py-3.5">
-                            <StatusBadge
-                              renewal={getRenewalInfo(plan.expiration_date)}
-                            />
-                          </td>
-                          <td className="px-5 py-3.5 text-slate-700 dark:text-slate-300">
-                            {clientNames.length === 0 ? (
-                              <span className="text-slate-400">
-                                No clients linked yet
-                              </span>
-                            ) : (
-                              <div className="flex flex-wrap gap-1.5">
-                                {clientNames.map((name) => (
-                                  <span
-                                    key={name}
-                                    className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300"
-                                  >
-                                    {name}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
+                      {sharedHostingUsage.map(({ plan }, index) => {
+                        const renewal = getRenewalInfo(plan.expiration_date);
+                        return (
+                          <tr
+                            key={plan.id}
+                            onClick={() => navigate("/shared-hosting")}
+                            className="cursor-pointer border-b border-slate-50 last:border-0 transition-colors hover:bg-slate-50 dark:border-slate-800/60 dark:hover:bg-slate-800/40"
+                          >
+                            <td className="px-5 py-3.5 text-slate-400">
+                              {index + 1}
+                            </td>
+                            <td className="px-5 py-3.5 font-medium text-slate-900 dark:text-slate-100">
+                              {plan.name}
+                            </td>
+                            <td className="px-5 py-3.5 text-slate-700 dark:text-slate-300">
+                              {plan.provider}
+                            </td>
+                            <td className="px-5 py-3.5 text-slate-700 dark:text-slate-300">
+                              {formatDate(plan.expiration_date)}
+                            </td>
+                            <td
+                              className={cn(
+                                "px-5 py-3.5 font-medium",
+                                renewal.daysRemaining < 0
+                                  ? "text-slate-500"
+                                  : renewal.daysRemaining <= 7
+                                    ? "text-red-600 dark:text-red-400"
+                                    : "text-slate-700 dark:text-slate-300",
+                              )}
+                            >
+                              {daysRemainingLabel(renewal.daysRemaining)}
+                            </td>
+                            <td className="px-5 py-3.5 text-slate-700 dark:text-slate-300">
+                              {formatCurrency(plan.annual_cost)}/yr
+                            </td>
+                            <td className="px-5 py-3.5">
+                              <StatusBadge renewal={renewal} />
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
 
                 <div className="flex flex-col gap-3 p-4 sm:hidden">
-                  {sharedHostingUsage.map(({ plan, clientNames }) => (
-                    <div
-                      key={plan.id}
-                      onClick={() => navigate("/shared-hosting")}
-                      className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <p className="font-semibold text-slate-900 dark:text-slate-100">
-                            {plan.name}
-                          </p>
-                          <p className="text-xs text-slate-400">
-                            {plan.provider}
+                  {sharedHostingUsage.map(({ plan }) => {
+                    const renewal = getRenewalInfo(plan.expiration_date);
+                    return (
+                      <div
+                        key={plan.id}
+                        onClick={() => navigate("/shared-hosting")}
+                        className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <p className="font-semibold text-slate-900 dark:text-slate-100">
+                              {plan.name}
+                            </p>
+                            <p className="text-xs text-slate-400">
+                              {plan.provider}
+                            </p>
+                          </div>
+                          <StatusBadge renewal={renewal} />
+                        </div>
+                        <div className="mt-3 flex items-center justify-between text-sm">
+                          <div>
+                            <p className="text-slate-900 dark:text-slate-100">
+                              {formatDate(plan.expiration_date)}
+                            </p>
+                            <p className="text-xs text-slate-400">
+                              {daysRemainingLabel(renewal.daysRemaining)}
+                            </p>
+                          </div>
+                          <p className="font-medium text-slate-900 dark:text-slate-100">
+                            {formatCurrency(plan.annual_cost)}/yr
+                            {egpRate !== null && (
+                              <span className="ml-1 text-xs font-normal text-slate-400">
+                                (≈ {formatEgp(plan.annual_cost * egpRate)})
+                              </span>
+                            )}
                           </p>
                         </div>
-                        <StatusBadge
-                          renewal={getRenewalInfo(plan.expiration_date)}
-                        />
                       </div>
-                      <p className="mt-2 text-xs text-slate-400">
-                        Expires {formatDate(plan.expiration_date)}
-                      </p>
-                      <div className="mt-3 flex flex-wrap gap-1.5">
-                        {clientNames.length === 0 ? (
-                          <span className="text-xs text-slate-400">
-                            No clients linked yet
-                          </span>
-                        ) : (
-                          clientNames.map((name) => (
-                            <span
-                              key={name}
-                              className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300"
-                            >
-                              {name}
-                            </span>
-                          ))
-                        )}
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </>
             )}

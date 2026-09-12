@@ -142,57 +142,6 @@ export function useOverviewData() {
     return stats;
   }, [domains.domains, hosting.hosting, emails.emails, sharedHostingHook.sharedHosting]);
 
-  const financials = useMemo<FinancialStats>(() => {
-    const sum = (rows: { annual_cost: number }[]) =>
-      rows.reduce((acc, r) => acc + (r.annual_cost ?? 0), 0);
-
-    const annualDomainCost = sum(domains.domains);
-    const annualHostingCost = sum(hosting.hosting);
-    const annualEmailCost = sum(emails.emails);
-    const annualSharedHostingCost = sum(sharedHostingHook.sharedHosting);
-
-    const allWithCost = [
-      ...domains.domains.map((d) => ({
-        expiration_date: d.expiration_date,
-        annual_cost: d.annual_cost,
-      })),
-      ...hosting.hosting.map((h) => ({
-        expiration_date: h.expiration_date,
-        annual_cost: h.annual_cost,
-      })),
-      ...emails.emails.map((e) => ({
-        expiration_date: e.expiration_date,
-        annual_cost: e.annual_cost,
-      })),
-      ...sharedHostingHook.sharedHosting.map((s) => ({
-        expiration_date: s.expiration_date,
-        annual_cost: s.annual_cost,
-      })),
-    ];
-
-    let upcomingRenewalExpense = 0;
-    let servicesNeedingRenewal = 0;
-    for (const row of allWithCost) {
-      if (!row.expiration_date) continue; // lifetime email — never renews
-      const { daysRemaining } = getRenewalInfo(row.expiration_date);
-      if (daysRemaining <= 30) {
-        upcomingRenewalExpense += row.annual_cost ?? 0;
-        servicesNeedingRenewal += 1;
-      }
-    }
-
-    return {
-      annualDomainCost,
-      annualHostingCost,
-      annualEmailCost,
-      annualSharedHostingCost,
-      totalAnnualCost:
-        annualDomainCost + annualHostingCost + annualEmailCost + annualSharedHostingCost,
-      upcomingRenewalExpense,
-      servicesNeedingRenewal,
-    };
-  }, [domains.domains, hosting.hosting, emails.emails, sharedHostingHook.sharedHosting]);
-
   const upcomingRenewals = useMemo<UpcomingRenewal[]>(() => {
     const rows: UpcomingRenewal[] = [
       ...domains.domains.map((d) => ({
@@ -202,7 +151,10 @@ export function useOverviewData() {
         serviceName: d.domain_name,
         provider: d.provider,
         expirationDate: d.expiration_date,
-        annualCost: d.annual_cost,
+        // The final price to the client — base cost plus the discounted
+        // commission, same figure the Domains table/form show as "Final
+        // Price" — not the raw pass-through cost.
+        annualCost: d.annual_cost + applyDiscount(d.commission_usd, d.discount_percent),
         renewal: getRenewalInfo(d.expiration_date),
       })),
       ...hosting.hosting.map((h) => ({
@@ -212,7 +164,13 @@ export function useOverviewData() {
         serviceName: h.account_name,
         provider: h.provider,
         expirationDate: h.expiration_date,
-        annualCost: h.annual_cost,
+        // Final price to the client: Private = base cost + discounted
+        // commission. Shared = its own shared_annual_cost, discounted
+        // directly (no commission concept).
+        annualCost:
+          h.host_type === "shared"
+            ? applyDiscount(h.shared_annual_cost, h.discount_percent)
+            : h.annual_cost + applyDiscount(h.commission_usd, h.discount_percent),
         renewal: getRenewalInfo(h.expiration_date),
       })),
       // Lifetime emails have no expiration_date and never renew, so they're
@@ -226,10 +184,15 @@ export function useOverviewData() {
           serviceName: e.email_account,
           provider: e.provider,
           expirationDate: e.expiration_date!,
-          annualCost: e.annual_cost,
+          // Final price to the client — base cost plus the discounted
+          // commission (recurring email only; Lifetime is filtered out
+          // above).
+          annualCost: e.annual_cost + applyDiscount(e.commission_usd, e.discount_percent),
           renewal: getRenewalInfo(e.expiration_date!),
         })),
-      // Shared hosting plans aren't tied to a client.
+      // Shared hosting plans aren't tied to a client, and have no
+      // commission/discount concept of their own — annual_cost is already
+      // the final figure.
       ...sharedHostingHook.sharedHosting.map((s) => ({
         id: s.id,
         kind: "shared_hosting" as const,
@@ -246,6 +209,44 @@ export function useOverviewData() {
       (a, b) => a.renewal.daysRemaining - b.renewal.daysRemaining
     );
   }, [domains.domains, hosting.hosting, emails.emails, sharedHostingHook.sharedHosting]);
+
+  const financials = useMemo<FinancialStats>(() => {
+    const sum = (rows: { annual_cost: number }[]) =>
+      rows.reduce((acc, r) => acc + (r.annual_cost ?? 0), 0);
+    // A "Shared" hosting row's cost lives in shared_annual_cost instead of
+    // annual_cost (which is forced to 0 for that row — see HostingRow), and
+    // a Lifetime email's cost lives in lifetime_cost instead of annual_cost
+    // (also forced to 0) — each row only ever has one of the pair non-zero,
+    // so summing both fields together gives the row's true cost either way.
+    const hostingCost = (h: { annual_cost: number; shared_annual_cost: number }) =>
+      h.annual_cost + h.shared_annual_cost;
+    const emailCost = (e: { annual_cost: number; lifetime_cost: number }) =>
+      e.annual_cost + e.lifetime_cost;
+
+    const annualDomainCost = sum(domains.domains);
+    const annualHostingCost = hosting.hosting.reduce((acc, h) => acc + hostingCost(h), 0);
+    const annualEmailCost = emails.emails.reduce((acc, e) => acc + emailCost(e), 0);
+    const annualSharedHostingCost = sum(sharedHostingHook.sharedHosting);
+
+    // Same set + same 30-day cutoff as the "Upcoming Renewals" table —
+    // "Upcoming Renewal Expenses (30d)" is the total of its Final Price
+    // (annualCost) column, the price billed to the client, not the raw
+    // pass-through cost the Secondary Expenses figures above use.
+    const dueSoon = upcomingRenewals.filter((r) => r.renewal.daysRemaining <= 30);
+    const upcomingRenewalExpense = dueSoon.reduce((sum, r) => sum + r.annualCost, 0);
+    const servicesNeedingRenewal = dueSoon.length;
+
+    return {
+      annualDomainCost,
+      annualHostingCost,
+      annualEmailCost,
+      annualSharedHostingCost,
+      totalAnnualCost:
+        annualDomainCost + annualHostingCost + annualEmailCost + annualSharedHostingCost,
+      upcomingRenewalExpense,
+      servicesNeedingRenewal,
+    };
+  }, [domains.domains, hosting.hosting, emails.emails, sharedHostingHook.sharedHosting, upcomingRenewals]);
 
   const profitStats = useMemo<ProfitStats | null>(() => {
     if (egpRate === null) return null; // can't blend USD + EGP without it yet
