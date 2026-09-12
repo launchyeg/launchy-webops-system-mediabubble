@@ -256,7 +256,7 @@ export default function OverviewPage() {
             ) : (
               <>
                 <StatCard
-                  label="Revenue"
+                  label="Total Revenue"
                   value={
                     egpRate !== null
                       ? formatEgp(profitStats.revenueUsd * egpRate)
@@ -336,6 +336,59 @@ export default function OverviewPage() {
               </>
             )}
           </div>
+
+          {!loading && profitStats && (
+            <Card className="mt-4 overflow-hidden p-0">
+              <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto]">
+                <div className="p-5 sm:p-6">
+                  <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                    Profit Margins
+                  </p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Gross and net profit margin across every client service
+                  </p>
+                  <div className="mt-6 flex flex-col gap-6">
+                    <MarginBar
+                      label="Gross Profit Margin"
+                      percent={
+                        profitStats.netRevenueUsd > 0
+                          ? (profitStats.grossProfitUsd /
+                              profitStats.netRevenueUsd) *
+                            100
+                          : 0
+                      }
+                    />
+                    <MarginBar
+                      label="Net Profit Margin"
+                      percent={
+                        profitStats.netRevenueUsd > 0
+                          ? (profitStats.netProfitUsd /
+                              profitStats.netRevenueUsd) *
+                            100
+                          : 0
+                      }
+                    />
+                  </div>
+                </div>
+                <div className="flex flex-col justify-center gap-5 border-t border-slate-200 p-5 dark:border-slate-800 sm:p-6 lg:w-56 lg:border-l lg:border-t-0">
+                  <SidePanelStat
+                    label="Total Discount"
+                    valueUsd={
+                      profitStats.revenueUsd - profitStats.netRevenueUsd
+                    }
+                    egpRate={egpRate}
+                  />
+                  <SidePanelStat
+                    label={`Total Taxes (${NET_PROFIT_DEDUCTION_PERCENT}%)`}
+                    valueUsd={
+                      profitStats.grossProfitUsd - profitStats.netProfitUsd
+                    }
+                    egpRate={egpRate}
+                  />
+                </div>
+              </div>
+            </Card>
+          )}
         </section>
 
         {/* Upcoming renewals table */}
@@ -635,6 +688,70 @@ function SectionHeading({
         <p className="text-sm text-slate-500 dark:text-slate-400">
           {description}
         </p>
+      )}
+    </div>
+  );
+}
+
+/** A labeled percentage bar with a gradient fill — echoes the filled-area
+ * look of a line chart without pretending to plot a real historical trend
+ * (the app has no stored daily/monthly financial snapshots to chart). */
+function MarginBar({ label, percent }: { label: string; percent: number }) {
+  const clamped = Math.min(100, Math.max(0, percent));
+  const negative = percent < 0;
+  return (
+    <div>
+      <div className="flex items-baseline justify-between gap-2">
+        <p className="text-sm font-medium text-slate-600 dark:text-slate-300">
+          {label}
+        </p>
+        <p
+          className={cn(
+            "text-lg font-bold tabular-nums",
+            negative
+              ? "text-red-600 dark:text-red-400"
+              : "text-slate-900 dark:text-slate-100",
+          )}
+        >
+          {percent.toFixed(1)}%
+        </p>
+      </div>
+      <div className="mt-2 h-3 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+        <div
+          className={cn(
+            "h-full rounded-full",
+            negative
+              ? "bg-red-500"
+              : "bg-gradient-to-r from-brand-300 to-brand-600 dark:from-brand-500 dark:to-brand-300",
+          )}
+          style={{ width: `${clamped}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+/** One stat in the Profit Margins card's side panel — EGP primary with a
+ * "≈ $USD" secondary line, matching every other Financial Analytics figure. */
+function SidePanelStat({
+  label,
+  valueUsd,
+  egpRate,
+}: {
+  label: string;
+  valueUsd: number;
+  egpRate: number | null;
+}) {
+  return (
+    <div>
+      <p className="text-xs font-medium text-slate-400">{label}</p>
+      <p className="mt-1 text-xl font-bold text-slate-900 dark:text-slate-100">
+        {egpRate !== null
+          ? formatEgp(valueUsd * egpRate)
+          : formatCurrency(valueUsd)}
+      </p>
+      {egpRate !== null && (
+        <p className="text-xs text-slate-400">≈ {formatCurrency(valueUsd)}</p>
       )}
     </div>
   );
