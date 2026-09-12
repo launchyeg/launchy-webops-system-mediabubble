@@ -99,12 +99,21 @@ export function useClientOverview() {
           (sum, d) => sum + d.annual_cost + applyDiscount(d.commission_usd, d.discount_percent),
           0
         ) +
-        privateHosting.reduce((sum, h) => sum + h.annual_cost + h.commission_usd, 0) +
-        recurringEmails.reduce((sum, e) => sum + e.annual_cost + e.commission_usd, 0);
+        privateHosting.reduce(
+          (sum, h) => sum + h.annual_cost + applyDiscount(h.commission_usd, h.discount_percent),
+          0
+        ) +
+        recurringEmails.reduce(
+          (sum, e) => sum + e.annual_cost + applyDiscount(e.commission_usd, e.discount_percent),
+          0
+        );
 
       // A Lifetime email's one-time EGP cost isn't a recurring annual
       // cost, so it's excluded here (and everywhere else in the app).
-      g.totalAnnualCostEgp = sharedHosting.reduce((sum, h) => sum + h.annual_cost_egp, 0);
+      g.totalAnnualCostEgp = sharedHosting.reduce(
+        (sum, h) => sum + applyDiscount(h.annual_cost_egp, h.discount_percent),
+        0
+      );
 
       // A lifetime email (null expiration_date) never contributes to the
       // worst tier, but its mere presence still means this client has at

@@ -16,6 +16,7 @@ import { useToast } from "@/contexts/ToastContext";
 import { deleteHosting } from "@/services/hosting.service";
 import { getRenewalInfo, formatDate, daysRemainingLabel } from "@/utils/dates";
 import { formatCurrency, formatEgp } from "@/utils/format";
+import { applyDiscount } from "@/utils/pricing";
 import { HOSTING_PROVIDERS } from "@/utils/constants";
 import type { HostingWithDomains } from "@/types";
 
@@ -154,13 +155,13 @@ export default function HostingPage() {
     {
       key: "cost",
       header: "Final Price",
-      // Private: USD final price (annual cost + commission). Shared: the
-      // recurring annual cost, entered directly in EGP. Both recurring, so
-      // both get "/yr".
+      // Private: USD final price (annual cost + discounted commission).
+      // Shared: the recurring annual cost, entered directly in EGP, minus
+      // its own discount. Both recurring, so both get "/yr".
       render: (h) =>
         h.host_type === "shared"
-          ? `${formatEgp(h.annual_cost_egp)}/yr`
-          : `${formatCurrency(h.annual_cost + h.commission_usd)}/yr`,
+          ? `${formatEgp(applyDiscount(h.annual_cost_egp, h.discount_percent))}/yr`
+          : `${formatCurrency(h.annual_cost + applyDiscount(h.commission_usd, h.discount_percent))}/yr`,
     },
     {
       key: "status",
@@ -294,8 +295,8 @@ export default function HostingPage() {
                   </div>
                   <p className="font-medium text-slate-900 dark:text-slate-100">
                     {h.host_type === "shared"
-                      ? `${formatEgp(h.annual_cost_egp)}/yr`
-                      : `${formatCurrency(h.annual_cost + h.commission_usd)}/yr`}
+                      ? `${formatEgp(applyDiscount(h.annual_cost_egp, h.discount_percent))}/yr`
+                      : `${formatCurrency(h.annual_cost + applyDiscount(h.commission_usd, h.discount_percent))}/yr`}
                   </p>
                 </div>
                 <div className="mt-3 flex justify-end gap-1">

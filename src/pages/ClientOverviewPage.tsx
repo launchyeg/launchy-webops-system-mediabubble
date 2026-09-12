@@ -310,15 +310,17 @@ function DetailRow({
     "domain_name" in data ? data.domain_name : "account_name" in data ? data.account_name : data.email_account;
   const isLifetime = "is_lifetime" in data && data.is_lifetime;
   const isSharedHost = "host_type" in data && data.host_type === "shared";
-  // Lifetime email: one-time EGP cost, no "/yr". Shared Host: recurring EGP
-  // cost, gets "/yr". Everything else: USD final price (base + commission).
+  // Lifetime email: one-time EGP cost (its own discount, no commission
+  // concept), no "/yr". Shared Host: recurring EGP cost (its own discount,
+  // no commission concept), gets "/yr". Everything else: USD final price
+  // (base + discounted commission).
   const egpCost = isLifetime
     ? "lifetime_cost_egp" in data
-      ? data.lifetime_cost_egp
+      ? applyDiscount(data.lifetime_cost_egp, data.discount_percent)
       : 0
     : isSharedHost
-      ? "annual_cost_egp" in data
-        ? data.annual_cost_egp
+      ? "annual_cost_egp" in data && "discount_percent" in data
+        ? applyDiscount(data.annual_cost_egp, data.discount_percent)
         : 0
       : undefined;
 
@@ -329,11 +331,9 @@ function DetailRow({
     priceText = `${formatEgp(egpCost)}${suffix}`;
     if (egpRate !== null) convertedText = `${formatCurrency(egpCost / egpRate)}${suffix}`;
   } else {
-    // Only a domain carries a discount — applied to its commission only.
-    const commission = "discount_percent" in data
-      ? applyDiscount(data.commission_usd, data.discount_percent)
-      : data.commission_usd;
-    const usd = data.annual_cost + commission;
+    // Domain, Private-host, and recurring-email commissions all carry a
+    // discount now.
+    const usd = data.annual_cost + applyDiscount(data.commission_usd, data.discount_percent);
     priceText = `${formatCurrency(usd)}${suffix}`;
     if (egpRate !== null) convertedText = `${formatEgp(usd * egpRate)}${suffix}`;
   }

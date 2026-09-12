@@ -16,6 +16,7 @@ import { useToast } from "@/contexts/ToastContext";
 import { deleteEmail } from "@/services/emails.service";
 import { getRenewalInfo, formatDate, daysRemainingLabel } from "@/utils/dates";
 import { formatCurrency, formatEgp } from "@/utils/format";
+import { applyDiscount } from "@/utils/pricing";
 import { EMAIL_PROVIDERS } from "@/utils/constants";
 import type { EmailWithClient } from "@/types";
 
@@ -143,13 +144,14 @@ export default function EmailsPage() {
       key: "cost",
       header: "Final Price",
       // Recurring emails: the full final price to the client (email cost +
-      // commission), matching the form's "Final Price to Client" box —
-      // "/yr" since it's an annual cost. Lifetime emails: unchanged — their
-      // one-time EGP cost, no "/yr" since it's a single payment.
+      // discounted commission), matching the form's "Final Price to
+      // Client" box — "/yr" since it's an annual cost. Lifetime emails:
+      // their one-time EGP cost minus its own discount, no "/yr" since
+      // it's a single payment.
       render: (e) =>
         e.is_lifetime
-          ? formatEgp(e.lifetime_cost_egp)
-          : `${formatCurrency(e.annual_cost + e.commission_usd)}/yr`,
+          ? formatEgp(applyDiscount(e.lifetime_cost_egp, e.discount_percent))
+          : `${formatCurrency(e.annual_cost + applyDiscount(e.commission_usd, e.discount_percent))}/yr`,
     },
     {
       key: "status",
@@ -275,8 +277,8 @@ export default function EmailsPage() {
                   )}
                   <p className="font-medium text-slate-900 dark:text-slate-100">
                     {e.is_lifetime
-                      ? formatEgp(e.lifetime_cost_egp)
-                      : `${formatCurrency(e.annual_cost + e.commission_usd)}/yr`}
+                      ? formatEgp(applyDiscount(e.lifetime_cost_egp, e.discount_percent))
+                      : `${formatCurrency(e.annual_cost + applyDiscount(e.commission_usd, e.discount_percent))}/yr`}
                   </p>
                 </div>
                 <div className="mt-3 flex justify-end gap-1">

@@ -12,6 +12,8 @@ import {
 } from "@/services/sharedHosting.service";
 import { getRenewalInfo, renewalTierToServiceStatus } from "@/utils/dates";
 import { HOSTING_PROVIDERS } from "@/utils/constants";
+import { useUsdToEgpRate } from "@/hooks/useUsdToEgpRate";
+import { formatCurrency, formatEgp } from "@/utils/format";
 import type { SharedHostingRow } from "@/types";
 
 interface SharedHostingFormModalProps {
@@ -41,6 +43,9 @@ export function SharedHostingFormModal({
   const [form, setForm] = useState(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
   const isEdit = Boolean(sharedHosting);
+  const { rate: egpRate } = useUsdToEgpRate();
+
+  const annualCostUsd = Number(form.annual_cost) || 0;
 
   useEffect(() => {
     if (!open) return;
@@ -70,7 +75,7 @@ export function SharedHostingFormModal({
         account_email: form.account_email.trim() || null,
         expiration_date: form.expiration_date,
         auto_renewal: form.auto_renewal,
-        annual_cost: Number(form.annual_cost) || 0,
+        annual_cost: annualCostUsd,
         notes: form.notes.trim() || null,
         status: renewalTierToServiceStatus(tier),
       };
@@ -151,6 +156,17 @@ export function SharedHostingFormModal({
               setForm((f) => ({ ...f, annual_cost: e.target.value }))
             }
           />
+        </div>
+        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 dark:border-slate-800 dark:bg-slate-800/50">
+          <p className="text-xs font-medium text-slate-400">Final Price</p>
+          <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+            {formatCurrency(annualCostUsd)}
+            {egpRate !== null && (
+              <span className="ml-1.5 font-normal text-slate-500 dark:text-slate-400">
+                (≈ {formatEgp(annualCostUsd * egpRate)})
+              </span>
+            )}
+          </p>
         </div>
         <Switch
           id="shared-hosting-auto-renewal"

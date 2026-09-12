@@ -148,8 +148,8 @@ export default function SharedHostingPage() {
     },
     {
       key: "cost",
-      header: "Annual Cost",
-      render: (h) => formatCurrency(h.annual_cost),
+      header: "Final Price",
+      render: (h) => `${formatCurrency(h.annual_cost)}/yr`,
     },
     {
       key: "status",

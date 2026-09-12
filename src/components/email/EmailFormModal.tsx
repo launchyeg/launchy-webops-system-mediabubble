@@ -15,6 +15,7 @@ import { EMAIL_PROVIDERS } from "@/utils/constants";
 import { useUsdToEgpRate } from "@/hooks/useUsdToEgpRate";
 import { useDomains } from "@/hooks/useDomains";
 import { formatCurrency, formatEgp } from "@/utils/format";
+import { applyDiscount } from "@/utils/pricing";
 import { cn } from "@/lib/utils";
 import type { ClientRow, EmailMailbox, EmailWithClient } from "@/types";
 
@@ -53,6 +54,7 @@ const EMPTY_FORM = {
   annual_cost: "",
   commission_usd: "",
   lifetime_cost_egp: "",
+  discount_percent: "",
   account_email: "",
   auto_renewal: false,
   mailboxes: [] as EmailMailbox[],
@@ -93,7 +95,16 @@ export function EmailFormModal({
   const perMailboxCommissionUsd = Number(form.commission_usd) || 0;
   const totalEmailCostUsd = perMailboxEmailCostUsd * mailboxCount;
   const totalCommissionUsd = perMailboxCommissionUsd * mailboxCount;
-  const finalPriceUsd = totalEmailCostUsd + totalCommissionUsd;
+  const discountPercent = Math.min(100, Math.max(0, Number(form.discount_percent) || 0));
+  // Recurring: discount comes off the commission only. Lifetime: no
+  // commission concept, so it comes off the EGP cost directly instead.
+  const netCommissionUsd = applyDiscount(totalCommissionUsd, discountPercent);
+  const commissionDiscountUsd = totalCommissionUsd - netCommissionUsd;
+  const finalPriceUsd = totalEmailCostUsd + netCommissionUsd;
+
+  const lifetimeCostEgp = Number(form.lifetime_cost_egp) || 0;
+  const netLifetimeCostEgp = applyDiscount(lifetimeCostEgp, discountPercent);
+  const lifetimeDiscountEgp = lifetimeCostEgp - netLifetimeCostEgp;
 
   const handleClientChange = (clientId: string) =>
     // Switching clients invalidates the previously selected domain (it
@@ -186,6 +197,7 @@ export function EmailFormModal({
               annual_cost: String(perMailboxRate(email.annual_cost ?? 0)),
               commission_usd: String(perMailboxRate(email.commission_usd ?? 0)),
               lifetime_cost_egp: String(email.lifetime_cost_egp ?? ""),
+              discount_percent: String(email.discount_percent ?? ""),
               account_email: email.account_email ?? "",
               auto_renewal: email.auto_renewal,
               mailboxes: email.mailboxes ?? [],
@@ -222,9 +234,8 @@ export function EmailFormModal({
         // cost — the form fields themselves hold the per-mailbox rate.
         annual_cost: form.is_lifetime ? 0 : totalEmailCostUsd,
         commission_usd: form.is_lifetime ? 0 : totalCommissionUsd,
-        lifetime_cost_egp: form.is_lifetime
-          ? Number(form.lifetime_cost_egp) || 0
-          : 0,
+        lifetime_cost_egp: form.is_lifetime ? lifetimeCostEgp : 0,
+        discount_percent: discountPercent,
         mailboxes: form.mailboxes
           .filter(
             (m) => m.email.trim() || m.password.trim() || m.storage.trim(),
@@ -365,18 +376,55 @@ export function EmailFormModal({
         </div>
 
         {form.is_lifetime ? (
-          <Input
-            label="Annual Cost (EGP)"
-            type="number"
-            min="0"
-            step="0.01"
-            required
-            hint="A one-time lifetime price, entered directly in Egyptian Pounds."
-            value={form.lifetime_cost_egp}
-            onChange={(e) =>
-              setForm((f) => ({ ...f, lifetime_cost_egp: e.target.value }))
-            }
-          />
+          <>
+            <Input
+              label="Annual Cost (EGP)"
+              type="number"
+              min="0"
+              step="0.01"
+              required
+              hint="A one-time lifetime price, entered directly in Egyptian Pounds."
+              value={form.lifetime_cost_egp}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, lifetime_cost_egp: e.target.value }))
+              }
+            />
+            <Input
+              label="Discount (%)"
+              type="number"
+              min="0"
+              max="100"
+              step="0.01"
+              className="w-24"
+              hint="Off the lifetime cost."
+              value={form.discount_percent}
+              onChange={(e) => {
+                const raw = e.target.value;
+                const clamped =
+                  raw === "" ? "" : String(Math.min(100, Math.max(0, Number(raw))));
+                setForm((f) => ({ ...f, discount_percent: clamped }));
+              }}
+            />
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 dark:border-slate-800 dark:bg-slate-800/50">
+              <p className="text-xs font-medium text-slate-400">Final Price to Client</p>
+              <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                {formatEgp(netLifetimeCostEgp)}
+                {egpRate !== null && (
+                  <span className="ml-1.5 font-normal text-slate-500 dark:text-slate-400">
+                    (≈ {formatCurrency(netLifetimeCostEgp / egpRate)})
+                  </span>
+                )}
+              </p>
+              {discountPercent > 0 && (
+                <dl className="mt-1.5 space-y-0.5 border-t border-slate-200 pt-1.5 text-xs text-slate-500 dark:border-slate-700 dark:text-slate-400">
+                  <div className="flex justify-between gap-2 text-emerald-600 dark:text-emerald-400">
+                    <dt>Discount ({discountPercent}%)</dt>
+                    <dd>-{formatEgp(lifetimeDiscountEgp)}</dd>
+                  </div>
+                </dl>
+              )}
+            </div>
+          </>
         ) : (
           <>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -402,17 +450,35 @@ export function EmailFormModal({
                 }
               />
             </div>
-            <Input
-              label="Commission (USD)"
-              type="number"
-              min="0"
-              step="0.01"
-              hint="Your company's fee for managing one mailbox, on top of its email cost. Per mailbox, like Email Cost above."
-              value={form.commission_usd}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, commission_usd: e.target.value }))
-              }
-            />
+            <div className="grid grid-cols-[1fr_auto] gap-4">
+              <Input
+                label="Commission (USD)"
+                type="number"
+                min="0"
+                step="0.01"
+                hint="Your company's fee for managing one mailbox, on top of its email cost. Per mailbox, like Email Cost above."
+                value={form.commission_usd}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, commission_usd: e.target.value }))
+                }
+              />
+              <Input
+                label="Discount (%)"
+                type="number"
+                min="0"
+                max="100"
+                step="0.01"
+                className="w-24"
+                hint="Off the commission only."
+                value={form.discount_percent}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  const clamped =
+                    raw === "" ? "" : String(Math.min(100, Math.max(0, Number(raw))));
+                  setForm((f) => ({ ...f, discount_percent: clamped }));
+                }}
+              />
+            </div>
             <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 dark:border-slate-800 dark:bg-slate-800/50">
               <p className="text-xs font-medium text-slate-400">
                 Final Price to Client
@@ -442,6 +508,12 @@ export function EmailFormModal({
                     <dt>Commission</dt>
                     <dd>{formatEgp(totalCommissionUsd * egpRate)}</dd>
                   </div>
+                  {discountPercent > 0 && (
+                    <div className="flex justify-between gap-2 text-emerald-600 dark:text-emerald-400">
+                      <dt>Discount ({discountPercent}%)</dt>
+                      <dd>-{formatEgp(commissionDiscountUsd * egpRate)}</dd>
+                    </div>
+                  )}
                 </dl>
               )}
             </div>

@@ -261,8 +261,12 @@ export default function ClientDetailsPage() {
                   subtitle={h.provider}
                   expirationDate={h.expiration_date}
                   annualCost={h.annual_cost}
-                  commissionUsd={h.commission_usd}
-                  egpCost={h.host_type === "shared" ? h.annual_cost_egp : undefined}
+                  commissionUsd={applyDiscount(h.commission_usd, h.discount_percent)}
+                  egpCost={
+                    h.host_type === "shared"
+                      ? applyDiscount(h.annual_cost_egp, h.discount_percent)
+                      : undefined
+                  }
                   extra={
                     h.host_type === "private" ? (
                       <>
@@ -330,9 +334,13 @@ export default function ClientDetailsPage() {
                   subtitle={e.provider}
                   expirationDate={e.expiration_date}
                   annualCost={e.annual_cost}
-                  commissionUsd={e.commission_usd}
+                  commissionUsd={applyDiscount(e.commission_usd, e.discount_percent)}
                   isLifetime={e.is_lifetime}
-                  egpCost={e.is_lifetime ? e.lifetime_cost_egp : undefined}
+                  egpCost={
+                    e.is_lifetime
+                      ? applyDiscount(e.lifetime_cost_egp, e.discount_percent)
+                      : undefined
+                  }
                   extra={
                     <>
                       {e.domain_id && domainNameById.has(e.domain_id) && (

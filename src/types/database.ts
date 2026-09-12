@@ -118,6 +118,10 @@ export type HostingRow = {
    * unlike a lifetime email's one-time payment — just a different
    * currency. */
   annual_cost_egp: number;
+  /** A percentage discount: for a "private" host, off commission_usd only
+   * (never annual_cost) — same rule as DomainRow.discount_percent. For a
+   * "shared" host (no commission concept), off annual_cost_egp directly. */
+  discount_percent: number;
   notes: string | null;
   created_at: string;
   updated_at: string;
@@ -181,6 +185,10 @@ export type EmailRow = {
   /** The one-time cost for a lifetime purchase, entered directly in EGP.
    * Used only when is_lifetime is true. */
   lifetime_cost_egp: number;
+  /** A percentage discount: for a recurring email, off commission_usd only
+   * (never annual_cost). For a Lifetime email (no commission concept), off
+   * lifetime_cost_egp directly. */
+  discount_percent: number;
   mailboxes: EmailMailbox[];
   notes: string | null;
   created_at: string;

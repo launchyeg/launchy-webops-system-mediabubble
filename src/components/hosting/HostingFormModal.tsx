@@ -21,6 +21,7 @@ import { useUsdToEgpRate } from "@/hooks/useUsdToEgpRate";
 import { useDomains } from "@/hooks/useDomains";
 import { useSharedHosting } from "@/hooks/useSharedHosting";
 import { formatCurrency, formatEgp } from "@/utils/format";
+import { applyDiscount } from "@/utils/pricing";
 import { cn } from "@/lib/utils";
 import type { ClientRow, HostingWithClient, HostType } from "@/types";
 
@@ -44,6 +45,7 @@ const EMPTY_FORM = {
   annual_cost: "",
   commission_usd: "",
   annual_cost_egp: "",
+  discount_percent: "",
   client_id: "",
   // Always at least one row, even blank — the Domains section keeps a
   // visible input ready rather than collapsing away when nothing's picked.
@@ -76,7 +78,15 @@ export function HostingFormModal({
 
   const annualCostUsd = Number(form.annual_cost) || 0;
   const commissionUsd = Number(form.commission_usd) || 0;
-  const finalPriceUsd = annualCostUsd + commissionUsd;
+  const annualCostEgp = Number(form.annual_cost_egp) || 0;
+  const discountPercent = Math.min(100, Math.max(0, Number(form.discount_percent) || 0));
+  // Private: discount comes off the commission only. Shared: there's no
+  // commission concept, so it comes off the EGP cost directly instead.
+  const netCommissionUsd = applyDiscount(commissionUsd, discountPercent);
+  const commissionDiscountUsd = commissionUsd - netCommissionUsd;
+  const netAnnualCostEgp = applyDiscount(annualCostEgp, discountPercent);
+  const egpDiscountAmount = annualCostEgp - netAnnualCostEgp;
+  const finalPriceUsd = annualCostUsd + netCommissionUsd;
 
   useEffect(() => {
     if (!open) return;
@@ -93,6 +103,7 @@ export function HostingFormModal({
             annual_cost: String(hosting.annual_cost ?? ""),
             commission_usd: String(hosting.commission_usd ?? ""),
             annual_cost_egp: String(hosting.annual_cost_egp ?? ""),
+            discount_percent: String(hosting.discount_percent ?? ""),
             client_id: hosting.client_id ?? "",
             domain_ids: [""],
             notes: hosting.notes ?? "",
@@ -178,10 +189,10 @@ export function HostingFormModal({
         expiration_date: form.expiration_date,
         auto_renewal: form.auto_renewal,
         account_email: form.account_email.trim() || null,
-        annual_cost: form.host_type === "shared" ? 0 : Number(form.annual_cost) || 0,
-        commission_usd: form.host_type === "shared" ? 0 : Number(form.commission_usd) || 0,
-        annual_cost_egp:
-          form.host_type === "shared" ? Number(form.annual_cost_egp) || 0 : 0,
+        annual_cost: form.host_type === "shared" ? 0 : annualCostUsd,
+        commission_usd: form.host_type === "shared" ? 0 : commissionUsd,
+        annual_cost_egp: form.host_type === "shared" ? annualCostEgp : 0,
+        discount_percent: discountPercent,
         client_id: form.client_id,
         notes: form.notes.trim() || null,
         status: renewalTierToServiceStatus(tier),
@@ -403,17 +414,76 @@ export function HostingFormModal({
             />
           )}
         </div>
-        {form.host_type === "private" && (
+        {form.host_type === "shared" && (
           <>
             <Input
-              label="Commission (USD)"
+              label="Discount (%)"
               type="number"
               min="0"
+              max="100"
               step="0.01"
-              hint="Your company's fee for managing this hosting account, on top of the annual cost."
-              value={form.commission_usd}
-              onChange={(e) => setForm((f) => ({ ...f, commission_usd: e.target.value }))}
+              className="w-24"
+              hint="Off the annual cost."
+              value={form.discount_percent}
+              onChange={(e) => {
+                const raw = e.target.value;
+                const clamped =
+                  raw === "" ? "" : String(Math.min(100, Math.max(0, Number(raw))));
+                setForm((f) => ({ ...f, discount_percent: clamped }));
+              }}
             />
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 dark:border-slate-800 dark:bg-slate-800/50">
+              <p className="text-xs font-medium text-slate-400">
+                Final Price to Client
+              </p>
+              <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                {formatEgp(netAnnualCostEgp)}
+                {egpRate !== null && (
+                  <span className="ml-1.5 font-normal text-slate-500 dark:text-slate-400">
+                    (≈ {formatCurrency(netAnnualCostEgp / egpRate)})
+                  </span>
+                )}
+              </p>
+              {discountPercent > 0 && (
+                <dl className="mt-1.5 space-y-0.5 border-t border-slate-200 pt-1.5 text-xs text-slate-500 dark:border-slate-700 dark:text-slate-400">
+                  <div className="flex justify-between gap-2 text-emerald-600 dark:text-emerald-400">
+                    <dt>Discount ({discountPercent}%)</dt>
+                    <dd>-{formatEgp(egpDiscountAmount)}</dd>
+                  </div>
+                </dl>
+              )}
+            </div>
+          </>
+        )}
+        {form.host_type === "private" && (
+          <>
+            <div className="grid grid-cols-[1fr_auto] gap-4">
+              <Input
+                label="Commission (USD)"
+                type="number"
+                min="0"
+                step="0.01"
+                hint="Your company's fee for managing this hosting account, on top of the annual cost."
+                value={form.commission_usd}
+                onChange={(e) => setForm((f) => ({ ...f, commission_usd: e.target.value }))}
+              />
+              <Input
+                label="Discount (%)"
+                type="number"
+                min="0"
+                max="100"
+                step="0.01"
+                className="w-24"
+                hint="Off the commission only."
+                value={form.discount_percent}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  const clamped =
+                    raw === "" ? "" : String(Math.min(100, Math.max(0, Number(raw))));
+                  setForm((f) => ({ ...f, discount_percent: clamped }));
+                }}
+              />
+            </div>
             <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 dark:border-slate-800 dark:bg-slate-800/50">
               <p className="text-xs font-medium text-slate-400">
                 Final Price to Client
@@ -436,6 +506,12 @@ export function HostingFormModal({
                     <dt>Commission</dt>
                     <dd>{formatEgp(commissionUsd * egpRate)}</dd>
                   </div>
+                  {discountPercent > 0 && (
+                    <div className="flex justify-between gap-2 text-emerald-600 dark:text-emerald-400">
+                      <dt>Discount ({discountPercent}%)</dt>
+                      <dd>-{formatEgp(commissionDiscountUsd * egpRate)}</dd>
+                    </div>
+                  )}
                 </dl>
               )}
             </div>
