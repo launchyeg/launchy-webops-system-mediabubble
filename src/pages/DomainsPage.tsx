@@ -82,6 +82,13 @@ export default function DomainsPage() {
 
   const columns: DataTableColumn<DomainWithClient>[] = [
     {
+      key: "row_number",
+      header: "#",
+      render: (_d, index) => index + 1,
+      className: "w-10 text-slate-400",
+      headerClassName: "w-10",
+    },
+    {
       key: "domain",
       header: "Domain",
       render: (d) => (

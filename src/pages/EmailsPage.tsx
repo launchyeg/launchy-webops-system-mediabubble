@@ -90,6 +90,13 @@ export default function EmailsPage() {
 
   const columns: DataTableColumn<EmailWithClient>[] = [
     {
+      key: "row_number",
+      header: "#",
+      render: (_e, index) => index + 1,
+      className: "w-10 text-slate-400",
+      headerClassName: "w-10",
+    },
+    {
       key: "account",
       header: "Email Account",
       render: (e) => (

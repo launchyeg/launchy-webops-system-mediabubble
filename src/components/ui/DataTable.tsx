@@ -7,7 +7,9 @@ import { cn } from "@/lib/utils";
 export interface DataTableColumn<T> {
   key: string;
   header: string;
-  render: (row: T) => ReactNode;
+  /** `index` is the row's position within the current (filtered/sorted)
+   * `rows` array — handy for a "#" row-number column. */
+  render: (row: T, index: number) => ReactNode;
   className?: string;
   headerClassName?: string;
 }
@@ -81,7 +83,7 @@ export function DataTable<T>({
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => (
+            {rows.map((row, index) => (
               <tr
                 key={keyExtractor(row)}
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
@@ -99,7 +101,7 @@ export function DataTable<T>({
                       col.className
                     )}
                   >
-                    {col.render(row)}
+                    {col.render(row, index)}
                   </td>
                 ))}
               </tr>

@@ -96,6 +96,13 @@ export default function SharedHostingPage() {
 
   const columns: DataTableColumn<SharedHostingRow>[] = [
     {
+      key: "row_number",
+      header: "#",
+      render: (_h, index) => index + 1,
+      className: "w-10 text-slate-400",
+      headerClassName: "w-10",
+    },
+    {
       key: "name",
       header: "Name",
       render: (h) => (

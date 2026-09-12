@@ -59,6 +59,13 @@ export default function ClientsPage() {
 
   const columns: DataTableColumn<ClientWithCounts>[] = [
     {
+      key: "row_number",
+      header: "#",
+      render: (_c, index) => index + 1,
+      className: "w-10 text-slate-400",
+      headerClassName: "w-10",
+    },
+    {
       key: "name",
       header: "Client",
       render: (c) => (

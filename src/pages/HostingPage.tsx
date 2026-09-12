@@ -90,6 +90,13 @@ export default function HostingPage() {
 
   const columns: DataTableColumn<HostingWithDomains>[] = [
     {
+      key: "row_number",
+      header: "#",
+      render: (_h, index) => index + 1,
+      className: "w-10 text-slate-400",
+      headerClassName: "w-10",
+    },
+    {
       key: "account",
       header: "Hosting Account",
       render: (h) => (
