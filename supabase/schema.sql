@@ -448,3 +448,8 @@ create or replace view upcoming_renewals as
     e.annual_cost,
     e.account_email
   from emails e;
+
+-- Query with the querying user's own permissions/RLS (not the view creator's,
+-- which is Postgres/postgres and bypasses RLS by default for views in the
+-- public schema). Supabase flags a view without this as "Security Definer".
+alter view upcoming_renewals set (security_invoker = on);
