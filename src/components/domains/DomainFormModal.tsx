@@ -82,6 +82,33 @@ export function DomainFormModal({
     );
   }, [domain, open, defaultClientId]);
 
+  // Picking "Unknown" as the provider means there's no real data to enter
+  // for this domain beyond its name/client — auto-fill every other field
+  // with a placeholder representing "unknown": account_email gets the
+  // literal text "Unknown" (its input is type="text", not type="email",
+  // specifically so this isn't rejected by native email-format validation),
+  // cost/commission/discount go to $0, auto-renewal goes off, and
+  // expiration_date gets pushed to a far-future placeholder (2099-01-01) so
+  // it never surfaces in renewal-urgency tracking (status badges, the
+  // "Renewals Due" stat cards, "Upcoming Renewals") the way a real deadline
+  // would — the schema has no true "unknown date" concept, so this is the
+  // safest stand-in.
+  const handleProviderChange = (v: string) =>
+    setForm((f) =>
+      v === "Unknown"
+        ? {
+            ...f,
+            provider: v,
+            account_email: "Unknown",
+            expiration_date: "2099-01-01",
+            annual_cost: "0",
+            commission_usd: "0",
+            discount_percent: "0",
+            auto_renewal: false,
+          }
+        : { ...f, provider: v }
+    );
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!form.client_id) {
@@ -147,7 +174,7 @@ export function DomainFormModal({
           <ProviderSelect
             presets={DOMAIN_PROVIDERS}
             value={form.provider}
-            onChange={(v) => setForm((f) => ({ ...f, provider: v }))}
+            onChange={handleProviderChange}
             required
           />
           <ClientSelect
@@ -160,7 +187,10 @@ export function DomainFormModal({
         </div>
         <Input
           label="Domain Account Email"
-          type="email"
+          // "text", not "email" — a Provider="Unknown" domain gets the
+          // literal placeholder "Unknown" here, which would fail native
+          // email-format validation on type="email" and block saving.
+          type="text"
           hint="The login email for the registrar account."
           value={form.account_email}
           onChange={(e) =>

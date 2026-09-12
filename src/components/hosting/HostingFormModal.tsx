@@ -166,6 +166,30 @@ export function HostingFormModal({
       ...sharedHostFields(planId),
     }));
 
+  // Picking "Unknown" as a Private host's provider means there's no real
+  // data to enter for this account beyond its name/client — same pattern
+  // as Domain's "Unknown" provider: auto-fill every other field with a
+  // placeholder representing "unknown" (literal "Unknown" for account
+  // email, $0 cost/commission/discount, auto-renewal off, and a far-future
+  // expiration date so it never surfaces in renewal-urgency tracking, since
+  // there's no real "unknown date" concept in the schema). Doesn't apply to
+  // Shared host — its Provider field just mirrors the selected plan.
+  const handleProviderChange = (v: string) =>
+    setForm((f) =>
+      v === "Unknown" && f.host_type === "private"
+        ? {
+            ...f,
+            provider: v,
+            account_email: "Unknown",
+            expiration_date: "2099-01-01",
+            annual_cost: "0",
+            commission_usd: "0",
+            discount_percent: "0",
+            auto_renewal: false,
+          }
+        : { ...f, provider: v }
+    );
+
   const addDomainRow = () =>
     setForm((f) => ({ ...f, domain_ids: [...f.domain_ids, ""] }));
 
@@ -330,7 +354,7 @@ export function HostingFormModal({
           <ProviderSelect
             presets={HOSTING_PROVIDERS}
             value={form.provider}
-            onChange={(v) => setForm((f) => ({ ...f, provider: v }))}
+            onChange={handleProviderChange}
             label="Hosting Provider"
             required
             disabled={form.host_type === "shared"}
@@ -351,7 +375,10 @@ export function HostingFormModal({
 
         <Input
           label="Hosting Account Email"
-          type="email"
+          // "text", not "email" — a Provider="Unknown" host gets the
+          // literal placeholder "Unknown" here, which would fail native
+          // email-format validation on type="email" and block saving.
+          type="text"
           value={form.account_email}
           disabled={form.host_type === "shared"}
           hint={

@@ -10,6 +10,7 @@ export const DOMAIN_PROVIDERS: DomainProvider[] = [
   "HostGator",
   "Bluehost",
   "Cloudflare",
+  "Unknown",
   "Other",
 ];
 
@@ -20,6 +21,7 @@ export const HOSTING_PROVIDERS: HostingProvider[] = [
   "HostGator",
   "Bluehost",
   "Cloudflare",
+  "Unknown",
   "Other",
 ];
 

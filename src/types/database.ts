@@ -19,7 +19,8 @@ export type DomainProvider =
   | "HostGator"
   | "Bluehost"
   | "Cloudflare"
-  | "Other";
+  | "Other"
+  | "Unknown";
 
 export type HostingProvider =
   | "Hostinger"
@@ -28,7 +29,8 @@ export type HostingProvider =
   | "HostGator"
   | "Bluehost"
   | "Cloudflare"
-  | "Other";
+  | "Other"
+  | "Unknown";
 
 export type EmailProvider =
   | "Zoho Mail"
