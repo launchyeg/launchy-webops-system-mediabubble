@@ -15,7 +15,7 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { useToast } from "@/contexts/ToastContext";
 import { deleteEmail } from "@/services/emails.service";
 import { getRenewalInfo, formatDate, daysRemainingLabel } from "@/utils/dates";
-import { formatCurrency, formatEgp } from "@/utils/format";
+import { formatCurrency } from "@/utils/format";
 import { applyDiscount } from "@/utils/pricing";
 import { EMAIL_PROVIDERS } from "@/utils/constants";
 import type { EmailWithClient } from "@/types";
@@ -38,9 +38,14 @@ export default function EmailsPage() {
   const [deleting, setDeleting] = useState(false);
 
   const providers = useMemo(() => {
-    const set = new Set<string>(EMAIL_PROVIDERS.filter((p) => p !== "Other"));
-    emails.forEach((e) => set.add(e.provider));
-    return Array.from(set).sort();
+    // Known presets keep EMAIL_PROVIDERS' own order; any custom provider
+    // typed via "Other" (not in that list) is appended after, alphabetized.
+    const known = EMAIL_PROVIDERS.filter((p) => p !== "Other");
+    const knownSet = new Set<string>(known);
+    const extra = Array.from(
+      new Set(emails.map((e) => e.provider).filter((p) => !knownSet.has(p)))
+    ).sort();
+    return [...known, ...extra];
   }, [emails]);
 
   const filtered = useMemo(() => {
@@ -146,11 +151,11 @@ export default function EmailsPage() {
       // Recurring emails: the full final price to the client (email cost +
       // discounted commission), matching the form's "Final Price to
       // Client" box — "/yr" since it's an annual cost. Lifetime emails:
-      // their one-time EGP cost minus its own discount, no "/yr" since
-      // it's a single payment.
+      // their own lifetime_cost minus its own discount (no commission
+      // concept), no "/yr" since it's a single payment.
       render: (e) =>
         e.is_lifetime
-          ? formatEgp(applyDiscount(e.lifetime_cost_egp, e.discount_percent))
+          ? formatCurrency(applyDiscount(e.lifetime_cost, e.discount_percent))
           : `${formatCurrency(e.annual_cost + applyDiscount(e.commission_usd, e.discount_percent))}/yr`,
     },
     {
@@ -277,7 +282,7 @@ export default function EmailsPage() {
                   )}
                   <p className="font-medium text-slate-900 dark:text-slate-100">
                     {e.is_lifetime
-                      ? formatEgp(applyDiscount(e.lifetime_cost_egp, e.discount_percent))
+                      ? formatCurrency(applyDiscount(e.lifetime_cost, e.discount_percent))
                       : `${formatCurrency(e.annual_cost + applyDiscount(e.commission_usd, e.discount_percent))}/yr`}
                   </p>
                 </div>

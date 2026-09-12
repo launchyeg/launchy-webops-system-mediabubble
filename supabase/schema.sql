@@ -137,22 +137,24 @@ create table if not exists hosting (
   expiration_date date not null,
   auto_renewal boolean not null default false,
   account_email text,
-  -- USD annual cost + commission — used only for a "Private" host
-  -- (0 for "Shared", which prices in EGP via annual_cost_egp instead).
+  -- The pass-through USD cost of a "Private" host, on top of which
+  -- commission_usd is added. 0 and unused for a "Shared" host — that has
+  -- its own separate cost field, shared_annual_cost.
   annual_cost numeric(10, 2) not null default 0,
   -- The company's commission for managing this hosting account, in USD.
   -- Purely informational — shown in the UI next to annual_cost as the final
   -- price sent to the client; nothing in the app derives logic from it.
   -- Used only for a "Private" host (0 for "Shared").
   commission_usd numeric(10, 2) not null default 0,
-  -- A "Shared" host's recurring annual cost, entered directly in EGP
-  -- instead of USD, with no commission breakdown. Used only for a
-  -- "Shared" host (0 for "Private"). Still a recurring annual cost,
-  -- unlike a Lifetime email's one-time payment — just a different currency.
-  annual_cost_egp numeric(10, 2) not null default 0,
+  -- A "Shared" host's own USD annual cost, entered directly (EGP is only
+  -- ever a live-converted display figure, never stored) — its own field,
+  -- separate from annual_cost/commission_usd, since a Shared host has no
+  -- commission concept: this figure alone is both its cost and its price
+  -- to the client. 0 and unused for a "Private" host.
+  shared_annual_cost numeric(10, 2) not null default 0,
   -- A percentage discount: for a Private host, off commission_usd only
   -- (never annual_cost) — same rule as domains.discount_percent. For a
-  -- Shared host (no commission concept), off annual_cost_egp directly.
+  -- Shared host (no commission concept), off shared_annual_cost directly.
   discount_percent numeric(5, 2) not null default 0
     check (discount_percent >= 0 and discount_percent <= 100),
   notes text,
@@ -204,26 +206,31 @@ create table if not exists emails (
   -- Null only when is_lifetime is true — a lifetime email service was paid
   -- for once and never expires, so it has no renewal date.
   expiration_date date,
-  -- When true, this was a one-time purchase (no expiration_date); its cost
-  -- lives in lifetime_cost_egp instead of annual_cost, and it's excluded
-  -- from all renewal tracking and from the USD annual-cost dashboard totals.
+  -- When true, this was a one-time purchase (no expiration_date), excluded
+  -- from all renewal tracking. Its one-time cost lives in lifetime_cost, a
+  -- separate field from the annual_cost a recurring email uses.
   is_lifetime boolean not null default false,
   auto_renewal boolean not null default false,
   account_email text,
-  -- "Email Cost": the recurring annual cost in USD. Used only when
-  -- is_lifetime is false (0 for lifetime rows).
+  -- "Email Cost" for a recurring email — a per-mailbox rate × mailbox count
+  -- total. 0 and unused for a Lifetime email, which has its own separate
+  -- cost field, lifetime_cost.
   annual_cost numeric(10, 2) not null default 0,
   -- The company's commission for managing this email service, in USD.
   -- Purely informational — shown next to annual_cost as the final price
-  -- sent to the client. Used only when is_lifetime is false.
+  -- sent to the client. Used only when is_lifetime is false (0 for
+  -- Lifetime rows, which have no commission concept).
   commission_usd numeric(10, 2) not null default 0,
-  -- The one-time cost for a lifetime purchase, entered directly in EGP.
-  -- Used only when is_lifetime is true.
-  lifetime_cost_egp numeric(10, 2) not null default 0,
+  -- A Lifetime email's own one-time USD cost, entered directly (EGP is
+  -- only ever a live-converted display figure, never stored) — its own
+  -- field, separate from annual_cost/commission_usd, since a Lifetime
+  -- email has no commission concept: this figure alone is both its cost
+  -- and its price to the client. 0 and unused for a recurring email.
+  lifetime_cost numeric(10, 2) not null default 0,
   -- A percentage discount: for a recurring email, off commission_usd only
   -- (never annual_cost) — same rule as domains/hosting-private. For a
-  -- Lifetime email (no commission concept), off lifetime_cost_egp
-  -- directly — same rule as a Shared Host.
+  -- Lifetime email (no commission concept), off lifetime_cost directly —
+  -- same rule as a Shared Host.
   discount_percent numeric(5, 2) not null default 0
     check (discount_percent >= 0 and discount_percent <= 100),
   check (

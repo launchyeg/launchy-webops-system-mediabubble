@@ -15,7 +15,7 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { useToast } from "@/contexts/ToastContext";
 import { deleteHosting } from "@/services/hosting.service";
 import { getRenewalInfo, formatDate, daysRemainingLabel } from "@/utils/dates";
-import { formatCurrency, formatEgp } from "@/utils/format";
+import { formatCurrency } from "@/utils/format";
 import { applyDiscount } from "@/utils/pricing";
 import { HOSTING_PROVIDERS } from "@/utils/constants";
 import type { HostingWithDomains } from "@/types";
@@ -45,9 +45,14 @@ export default function HostingPage() {
   const [deleting, setDeleting] = useState(false);
 
   const providers = useMemo(() => {
-    const set = new Set<string>(HOSTING_PROVIDERS.filter((p) => p !== "Other"));
-    hosting.forEach((h) => set.add(h.provider));
-    return Array.from(set).sort();
+    // Known presets keep HOSTING_PROVIDERS' own order; any custom provider
+    // typed via "Other" (not in that list) is appended after, alphabetized.
+    const known = HOSTING_PROVIDERS.filter((p) => p !== "Other");
+    const knownSet = new Set<string>(known);
+    const extra = Array.from(
+      new Set(hosting.map((h) => h.provider).filter((p) => !knownSet.has(p)))
+    ).sort();
+    return [...known, ...extra];
   }, [hosting]);
 
   const filtered = useMemo(() => {
@@ -155,12 +160,12 @@ export default function HostingPage() {
     {
       key: "cost",
       header: "Final Price",
-      // Private: USD final price (annual cost + discounted commission).
-      // Shared: the recurring annual cost, entered directly in EGP, minus
-      // its own discount. Both recurring, so both get "/yr".
+      // Private: annual cost + discounted commission. Shared: its own
+      // shared_annual_cost minus its own discount (no commission concept).
+      // Both USD, both recurring, so both get "/yr".
       render: (h) =>
         h.host_type === "shared"
-          ? `${formatEgp(applyDiscount(h.annual_cost_egp, h.discount_percent))}/yr`
+          ? `${formatCurrency(applyDiscount(h.shared_annual_cost, h.discount_percent))}/yr`
           : `${formatCurrency(h.annual_cost + applyDiscount(h.commission_usd, h.discount_percent))}/yr`,
     },
     {
@@ -295,7 +300,7 @@ export default function HostingPage() {
                   </div>
                   <p className="font-medium text-slate-900 dark:text-slate-100">
                     {h.host_type === "shared"
-                      ? `${formatEgp(applyDiscount(h.annual_cost_egp, h.discount_percent))}/yr`
+                      ? `${formatCurrency(applyDiscount(h.shared_annual_cost, h.discount_percent))}/yr`
                       : `${formatCurrency(h.annual_cost + applyDiscount(h.commission_usd, h.discount_percent))}/yr`}
                   </p>
                 </div>

@@ -44,7 +44,7 @@ const EMPTY_FORM = {
   account_email: "",
   annual_cost: "",
   commission_usd: "",
-  annual_cost_egp: "",
+  shared_annual_cost: "",
   discount_percent: "",
   client_id: "",
   // Always at least one row, even blank — the Domains section keeps a
@@ -53,7 +53,8 @@ const EMPTY_FORM = {
   notes: "",
 };
 
-const withAtLeastOneDomainRow = (ids: string[]) => (ids.length === 0 ? [""] : ids);
+const withAtLeastOneDomainRow = (ids: string[]) =>
+  ids.length === 0 ? [""] : ids;
 
 export function HostingFormModal({
   open,
@@ -73,20 +74,30 @@ export function HostingFormModal({
 
   const clientDomains = useMemo(
     () => domains.filter((d) => d.client_id === form.client_id),
-    [domains, form.client_id]
+    [domains, form.client_id],
   );
 
   const annualCostUsd = Number(form.annual_cost) || 0;
   const commissionUsd = Number(form.commission_usd) || 0;
-  const annualCostEgp = Number(form.annual_cost_egp) || 0;
-  const discountPercent = Math.min(100, Math.max(0, Number(form.discount_percent) || 0));
+  const sharedAnnualCostUsd = Number(form.shared_annual_cost) || 0;
+  const discountPercent = Math.min(
+    100,
+    Math.max(0, Number(form.discount_percent) || 0),
+  );
   // Private: discount comes off the commission only. Shared: there's no
-  // commission concept, so it comes off the EGP cost directly instead.
+  // commission concept, so it comes off its own annual cost directly instead.
   const netCommissionUsd = applyDiscount(commissionUsd, discountPercent);
   const commissionDiscountUsd = commissionUsd - netCommissionUsd;
-  const netAnnualCostEgp = applyDiscount(annualCostEgp, discountPercent);
-  const egpDiscountAmount = annualCostEgp - netAnnualCostEgp;
-  const finalPriceUsd = annualCostUsd + netCommissionUsd;
+  const netSharedAnnualCostUsd = applyDiscount(
+    sharedAnnualCostUsd,
+    discountPercent,
+  );
+  const sharedAnnualCostDiscountUsd =
+    sharedAnnualCostUsd - netSharedAnnualCostUsd;
+  const finalPriceUsd =
+    form.host_type === "shared"
+      ? netSharedAnnualCostUsd
+      : annualCostUsd + netCommissionUsd;
 
   useEffect(() => {
     if (!open) return;
@@ -102,17 +113,19 @@ export function HostingFormModal({
             account_email: hosting.account_email ?? "",
             annual_cost: String(hosting.annual_cost ?? ""),
             commission_usd: String(hosting.commission_usd ?? ""),
-            annual_cost_egp: String(hosting.annual_cost_egp ?? ""),
+            shared_annual_cost: String(hosting.shared_annual_cost ?? ""),
             discount_percent: String(hosting.discount_percent ?? ""),
             client_id: hosting.client_id ?? "",
             domain_ids: [""],
             notes: hosting.notes ?? "",
           }
-        : { ...EMPTY_FORM, client_id: defaultClientId ?? "" }
+        : { ...EMPTY_FORM, client_id: defaultClientId ?? "" },
     );
     if (hosting) {
       listHostingDomainIds(hosting.id)
-        .then((ids) => setForm((f) => ({ ...f, domain_ids: withAtLeastOneDomainRow(ids) })))
+        .then((ids) =>
+          setForm((f) => ({ ...f, domain_ids: withAtLeastOneDomainRow(ids) })),
+        )
         .catch((err) => {
           toast({
             title: "Couldn't load this account's linked domains",
@@ -133,7 +146,10 @@ export function HostingFormModal({
   // mirror the selected shared_hosting plan and become read-only.
   const sharedHostFields = (planId: string) => {
     const plan = sharedHosting.find((s) => s.id === planId);
-    return { provider: plan?.provider ?? "", account_email: plan?.account_email ?? "" };
+    return {
+      provider: plan?.provider ?? "",
+      account_email: plan?.account_email ?? "",
+    };
   };
 
   const handleHostTypeChange = (hostType: HostType) =>
@@ -144,9 +160,14 @@ export function HostingFormModal({
     }));
 
   const handleSharedHostChange = (planId: string) =>
-    setForm((f) => ({ ...f, shared_hosting_id: planId, ...sharedHostFields(planId) }));
+    setForm((f) => ({
+      ...f,
+      shared_hosting_id: planId,
+      ...sharedHostFields(planId),
+    }));
 
-  const addDomainRow = () => setForm((f) => ({ ...f, domain_ids: [...f.domain_ids, ""] }));
+  const addDomainRow = () =>
+    setForm((f) => ({ ...f, domain_ids: [...f.domain_ids, ""] }));
 
   const updateDomainRow = (index: number, domainId: string) =>
     setForm((f) => ({
@@ -157,7 +178,9 @@ export function HostingFormModal({
   const removeDomainRow = (index: number) =>
     setForm((f) => ({
       ...f,
-      domain_ids: withAtLeastOneDomainRow(f.domain_ids.filter((_, i) => i !== index)),
+      domain_ids: withAtLeastOneDomainRow(
+        f.domain_ids.filter((_, i) => i !== index),
+      ),
     }));
 
   const handleSubmit = async (e: FormEvent) => {
@@ -183,15 +206,19 @@ export function HostingFormModal({
         // save time, not a live join — kept in sync with everywhere
         // account_name is already displayed as this row's title.
         account_name:
-          form.host_type === "shared" ? selectedSharedHost!.name : form.account_name.trim(),
-        shared_hosting_id: form.host_type === "shared" ? form.shared_hosting_id : null,
+          form.host_type === "shared"
+            ? selectedSharedHost!.name
+            : form.account_name.trim(),
+        shared_hosting_id:
+          form.host_type === "shared" ? form.shared_hosting_id : null,
         provider: form.provider.trim(),
         expiration_date: form.expiration_date,
         auto_renewal: form.auto_renewal,
         account_email: form.account_email.trim() || null,
         annual_cost: form.host_type === "shared" ? 0 : annualCostUsd,
         commission_usd: form.host_type === "shared" ? 0 : commissionUsd,
-        annual_cost_egp: form.host_type === "shared" ? annualCostEgp : 0,
+        shared_annual_cost:
+          form.host_type === "shared" ? sharedAnnualCostUsd : 0,
         discount_percent: discountPercent,
         client_id: form.client_id,
         notes: form.notes.trim() || null,
@@ -228,7 +255,9 @@ export function HostingFormModal({
       onClose={onClose}
       title={isEdit ? "Edit Hosting Account" : "Add Hosting Account"}
       description={
-        isEdit ? "Update this hosting account's details." : "Register a new hosting account."
+        isEdit
+          ? "Update this hosting account's details."
+          : "Register a new hosting account."
       }
     >
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
@@ -244,7 +273,7 @@ export function HostingFormModal({
                 "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
                 form.host_type === "private"
                   ? "bg-brand-600 text-white"
-                  : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
+                  : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100",
               )}
             >
               Private Host
@@ -256,7 +285,7 @@ export function HostingFormModal({
                 "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
                 form.host_type === "shared"
                   ? "bg-brand-600 text-white"
-                  : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
+                  : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100",
               )}
             >
               Shared Host
@@ -270,7 +299,9 @@ export function HostingFormModal({
             required
             placeholder="e.g. client-site-prod"
             value={form.account_name}
-            onChange={(e) => setForm((f) => ({ ...f, account_name: e.target.value }))}
+            onChange={(e) =>
+              setForm((f) => ({ ...f, account_name: e.target.value }))
+            }
           />
         ) : (
           <Select
@@ -303,7 +334,11 @@ export function HostingFormModal({
             label="Hosting Provider"
             required
             disabled={form.host_type === "shared"}
-            hint={form.host_type === "shared" ? "Set by the selected shared host." : undefined}
+            hint={
+              form.host_type === "shared"
+                ? "Set by the selected shared host."
+                : undefined
+            }
           />
           <ClientSelect
             clients={clients}
@@ -319,8 +354,14 @@ export function HostingFormModal({
           type="email"
           value={form.account_email}
           disabled={form.host_type === "shared"}
-          hint={form.host_type === "shared" ? "Set by the selected shared host." : undefined}
-          onChange={(e) => setForm((f) => ({ ...f, account_email: e.target.value }))}
+          hint={
+            form.host_type === "shared"
+              ? "Set by the selected shared host."
+              : undefined
+          }
+          onChange={(e) =>
+            setForm((f) => ({ ...f, account_email: e.target.value }))
+          }
         />
 
         <div className="flex flex-col gap-3">
@@ -342,14 +383,16 @@ export function HostingFormModal({
             )}
           </div>
           {!form.client_id && (
-            <p className="text-xs text-slate-400">Select a client above first.</p>
+            <p className="text-xs text-slate-400">
+              Select a client above first.
+            </p>
           )}
           {form.domain_ids.map((domainId, index) => {
             const chosenElsewhere = new Set(
-              form.domain_ids.filter((id, i) => i !== index && id)
+              form.domain_ids.filter((id, i) => i !== index && id),
             );
             const options = clientDomains.filter(
-              (d) => d.id === domainId || !chosenElsewhere.has(d.id)
+              (d) => d.id === domainId || !chosenElsewhere.has(d.id),
             );
             return (
               <div key={index} className="flex items-center gap-2">
@@ -382,81 +425,74 @@ export function HostingFormModal({
           })}
         </div>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Input
-            label="Expiration Date"
-            type="date"
-            required
-            value={form.expiration_date}
-            onChange={(e) =>
-              setForm((f) => ({ ...f, expiration_date: e.target.value }))
-            }
-          />
-          {form.host_type === "shared" ? (
-            <Input
-              label="Annual Cost (EGP)"
-              type="number"
-              min="0"
-              step="0.01"
-              required
-              value={form.annual_cost_egp}
-              onChange={(e) => setForm((f) => ({ ...f, annual_cost_egp: e.target.value }))}
-            />
-          ) : (
-            <Input
-              label="Annual Cost (USD)"
-              type="number"
-              min="0"
-              step="0.01"
-              required
-              value={form.annual_cost}
-              onChange={(e) => setForm((f) => ({ ...f, annual_cost: e.target.value }))}
-            />
-          )}
-        </div>
-        {form.host_type === "shared" && (
+        {form.host_type === "shared" ? (
           <>
             <Input
-              label="Discount (%)"
-              type="number"
-              min="0"
-              max="100"
-              step="0.01"
-              className="w-24"
-              hint="Off the annual cost."
-              value={form.discount_percent}
-              onChange={(e) => {
-                const raw = e.target.value;
-                const clamped =
-                  raw === "" ? "" : String(Math.min(100, Math.max(0, Number(raw))));
-                setForm((f) => ({ ...f, discount_percent: clamped }));
-              }}
+              label="Expiration Date"
+              type="date"
+              required
+              value={form.expiration_date}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, expiration_date: e.target.value }))
+              }
             />
-            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 dark:border-slate-800 dark:bg-slate-800/50">
-              <p className="text-xs font-medium text-slate-400">
-                Final Price to Client
-              </p>
-              <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                {formatEgp(netAnnualCostEgp)}
-                {egpRate !== null && (
-                  <span className="ml-1.5 font-normal text-slate-500 dark:text-slate-400">
-                    (≈ {formatCurrency(netAnnualCostEgp / egpRate)})
-                  </span>
-                )}
-              </p>
-              {discountPercent > 0 && (
-                <dl className="mt-1.5 space-y-0.5 border-t border-slate-200 pt-1.5 text-xs text-slate-500 dark:border-slate-700 dark:text-slate-400">
-                  <div className="flex justify-between gap-2 text-emerald-600 dark:text-emerald-400">
-                    <dt>Discount ({discountPercent}%)</dt>
-                    <dd>-{formatEgp(egpDiscountAmount)}</dd>
-                  </div>
-                </dl>
-              )}
+            <div className="grid grid-cols-[1fr_auto] gap-4">
+              <Input
+                label="Annual Cost (USD)"
+                type="number"
+                min="0"
+                step="0.01"
+                required
+                hint="Your company's fee for managing this hosting account, on top of the annual cost."
+                value={form.shared_annual_cost}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, shared_annual_cost: e.target.value }))
+                }
+              />
+              <Input
+                label="Discount (%)"
+                type="number"
+                min="0"
+                max="100"
+                step="0.01"
+                className="w-24"
+                hint="Off the annual cost."
+                value={form.discount_percent}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  const clamped =
+                    raw === ""
+                      ? ""
+                      : String(Math.min(100, Math.max(0, Number(raw))));
+                  setForm((f) => ({ ...f, discount_percent: clamped }));
+                }}
+              />
             </div>
           </>
-        )}
-        {form.host_type === "private" && (
+        ) : (
           <>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Input
+                label="Expiration Date"
+                type="date"
+                required
+                value={form.expiration_date}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, expiration_date: e.target.value }))
+                }
+              />
+              <Input
+                label="Annual Cost (USD)"
+                type="number"
+                min="0"
+                step="0.01"
+                required
+                value={form.annual_cost}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, annual_cost: e.target.value }))
+                }
+              />
+            </div>
             <div className="grid grid-cols-[1fr_auto] gap-4">
               <Input
                 label="Commission (USD)"
@@ -465,7 +501,9 @@ export function HostingFormModal({
                 step="0.01"
                 hint="Your company's fee for managing this hosting account, on top of the annual cost."
                 value={form.commission_usd}
-                onChange={(e) => setForm((f) => ({ ...f, commission_usd: e.target.value }))}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, commission_usd: e.target.value }))
+                }
               />
               <Input
                 label="Discount (%)"
@@ -479,48 +517,66 @@ export function HostingFormModal({
                 onChange={(e) => {
                   const raw = e.target.value;
                   const clamped =
-                    raw === "" ? "" : String(Math.min(100, Math.max(0, Number(raw))));
+                    raw === ""
+                      ? ""
+                      : String(Math.min(100, Math.max(0, Number(raw))));
                   setForm((f) => ({ ...f, discount_percent: clamped }));
                 }}
               />
             </div>
-            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 dark:border-slate-800 dark:bg-slate-800/50">
-              <p className="text-xs font-medium text-slate-400">
-                Final Price to Client
-              </p>
-              <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                {formatCurrency(finalPriceUsd)}
-                {egpRate !== null && (
-                  <span className="ml-1.5 font-normal text-slate-500 dark:text-slate-400">
-                    (≈ {formatEgp(finalPriceUsd * egpRate)})
-                  </span>
-                )}
-              </p>
-              {egpRate !== null && (
-                <dl className="mt-1.5 space-y-0.5 border-t border-slate-200 pt-1.5 text-xs text-slate-500 dark:border-slate-700 dark:text-slate-400">
-                  <div className="flex justify-between gap-2">
-                    <dt>Hosting price</dt>
-                    <dd>{formatEgp(annualCostUsd * egpRate)}</dd>
-                  </div>
-                  <div className="flex justify-between gap-2">
-                    <dt>Commission</dt>
-                    <dd>{formatEgp(commissionUsd * egpRate)}</dd>
-                  </div>
-                  {discountPercent > 0 && (
-                    <div className="flex justify-between gap-2 text-emerald-600 dark:text-emerald-400">
-                      <dt>Discount ({discountPercent}%)</dt>
-                      <dd>-{formatEgp(commissionDiscountUsd * egpRate)}</dd>
-                    </div>
-                  )}
-                </dl>
-              )}
-            </div>
           </>
         )}
+        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 dark:border-slate-800 dark:bg-slate-800/50">
+          <p className="text-xs font-medium text-slate-400">
+            Final Price to Client
+          </p>
+          <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+            {formatCurrency(finalPriceUsd)}
+            {egpRate !== null && (
+              <span className="ml-1.5 font-normal text-slate-500 dark:text-slate-400">
+                (≈ {formatEgp(finalPriceUsd * egpRate)})
+              </span>
+            )}
+          </p>
+          {egpRate !== null && form.host_type === "private" && (
+            <dl className="mt-1.5 space-y-0.5 border-t border-slate-200 pt-1.5 text-xs text-slate-500 dark:border-slate-700 dark:text-slate-400">
+              <div className="flex justify-between gap-2">
+                <dt>Hosting price</dt>
+                <dd>{formatEgp(annualCostUsd * egpRate)}</dd>
+              </div>
+              <div className="flex justify-between gap-2">
+                <dt>Commission</dt>
+                <dd>{formatEgp(commissionUsd * egpRate)}</dd>
+              </div>
+              {discountPercent > 0 && (
+                <div className="flex justify-between gap-2 text-emerald-600 dark:text-emerald-400">
+                  <dt>Discount ({discountPercent}%)</dt>
+                  <dd>-{formatEgp(commissionDiscountUsd * egpRate)}</dd>
+                </div>
+              )}
+            </dl>
+          )}
+          {egpRate !== null && form.host_type === "shared" && (
+            <dl className="mt-1.5 space-y-0.5 border-t border-slate-200 pt-1.5 text-xs text-slate-500 dark:border-slate-700 dark:text-slate-400">
+              <div className="flex justify-between gap-2">
+                <dt>Hosting price</dt>
+                <dd>{formatEgp(sharedAnnualCostUsd * egpRate)}</dd>
+              </div>
+              {discountPercent > 0 && (
+                <div className="flex justify-between gap-2 text-emerald-600 dark:text-emerald-400">
+                  <dt>Discount ({discountPercent}%)</dt>
+                  <dd>-{formatEgp(sharedAnnualCostDiscountUsd * egpRate)}</dd>
+                </div>
+              )}
+            </dl>
+          )}
+        </div>
         <Switch
           id="hosting-auto-renewal"
           checked={form.auto_renewal}
-          onChange={(checked) => setForm((f) => ({ ...f, auto_renewal: checked }))}
+          onChange={(checked) =>
+            setForm((f) => ({ ...f, auto_renewal: checked }))
+          }
           label="Auto Renewal Enabled"
         />
         <Textarea

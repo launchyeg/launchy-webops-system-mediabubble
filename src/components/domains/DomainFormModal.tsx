@@ -53,8 +53,12 @@ export function DomainFormModal({
 
   const annualCostUsd = Number(form.annual_cost) || 0;
   const commissionUsd = Number(form.commission_usd) || 0;
-  const discountPercent = Math.min(100, Math.max(0, Number(form.discount_percent) || 0));
-  const discountAmountUsd = commissionUsd - applyDiscount(commissionUsd, discountPercent);
+  const discountPercent = Math.min(
+    100,
+    Math.max(0, Number(form.discount_percent) || 0),
+  );
+  const discountAmountUsd =
+    commissionUsd - applyDiscount(commissionUsd, discountPercent);
   const netCommissionUsd = commissionUsd - discountAmountUsd;
   const finalPriceUsd = annualCostUsd + netCommissionUsd;
 
@@ -191,7 +195,7 @@ export function DomainFormModal({
             type="number"
             min="0"
             step="0.01"
-            hint="Your company's fee for managing this domain, on top of the annual cost."
+            hint="Your fee for managing this domain"
             value={form.commission_usd}
             onChange={(e) =>
               setForm((f) => ({ ...f, commission_usd: e.target.value }))
@@ -213,7 +217,9 @@ export function DomainFormModal({
               // otherwise the live preview below could briefly show a
               // negative discount amount while typing.
               const clamped =
-                raw === "" ? "" : String(Math.min(100, Math.max(0, Number(raw))));
+                raw === ""
+                  ? ""
+                  : String(Math.min(100, Math.max(0, Number(raw))));
               setForm((f) => ({ ...f, discount_percent: clamped }));
             }}
           />

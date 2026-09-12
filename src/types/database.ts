@@ -104,23 +104,25 @@ export type HostingRow = {
   expiration_date: string;
   auto_renewal: boolean;
   account_email: string | null;
-  /** USD annual cost. Used only when host_type is "private" (0 for
-   * "shared", which prices in EGP via annual_cost_egp instead). */
+  /** The pass-through USD cost of a "private" host, on top of which
+   * commission_usd is added. 0 and unused for a "shared" host — that has
+   * its own separate cost field, shared_annual_cost. */
   annual_cost: number;
   /** The company's commission for managing this hosting account, in USD.
    * Purely informational — displayed as the final price sent to the client
    * (annual_cost + commission_usd); nothing derives logic from it. Used
    * only when host_type is "private" (0 for "shared"). */
   commission_usd: number;
-  /** A "shared" host's recurring annual cost, entered directly in EGP
-   * instead of USD, with no commission/Final-Price breakdown. Used only
-   * when host_type is "shared" (0 for "private"). Still recurring/annual,
-   * unlike a lifetime email's one-time payment — just a different
-   * currency. */
-  annual_cost_egp: number;
+  /** A "shared" host's own USD annual cost, entered directly (EGP is only
+   * ever a live-converted display figure, never stored) — kept as its own
+   * field, separate from annual_cost/commission_usd, since a shared host
+   * has no commission concept: this figure alone is both its cost and its
+   * price to the client. 0 and unused for a "private" host. */
+  shared_annual_cost: number;
   /** A percentage discount: for a "private" host, off commission_usd only
    * (never annual_cost) — same rule as DomainRow.discount_percent. For a
-   * "shared" host (no commission concept), off annual_cost_egp directly. */
+   * "shared" host (no commission concept), off shared_annual_cost
+   * directly. */
   discount_percent: number;
   notes: string | null;
   created_at: string;
@@ -169,25 +171,30 @@ export type EmailRow = {
   /** Null only when is_lifetime is true — a lifetime email service was paid
    * for once and never expires, so it has no renewal date. */
   expiration_date: string | null;
-  /** True for a one-time purchase with no expiration_date; its cost lives
-   * in lifetime_cost_egp instead of annual_cost, and it's excluded from all
-   * renewal tracking and from the USD annual-cost dashboard totals. */
+  /** True for a one-time purchase with no expiration_date, excluded from
+   * all renewal tracking. Its one-time cost lives in lifetime_cost, a
+   * separate field from the annual_cost a recurring email uses. */
   is_lifetime: boolean;
   auto_renewal: boolean;
   account_email: string | null;
-  /** "Email Cost": the recurring annual cost in USD. Used only when
-   * is_lifetime is false (0 for lifetime rows). */
+  /** "Email Cost" for a recurring email — a per-mailbox rate × mailbox
+   * count total. 0 and unused for a Lifetime email, which has its own
+   * separate cost field, lifetime_cost. */
   annual_cost: number;
   /** The company's commission for managing this email service, in USD.
    * Purely informational — displayed as the final price sent to the client
-   * (annual_cost + commission_usd). Used only when is_lifetime is false. */
+   * (annual_cost + commission_usd). Used only when is_lifetime is false
+   * (0 for Lifetime rows, which have no commission concept). */
   commission_usd: number;
-  /** The one-time cost for a lifetime purchase, entered directly in EGP.
-   * Used only when is_lifetime is true. */
-  lifetime_cost_egp: number;
+  /** A Lifetime email's own one-time USD cost, entered directly (EGP is
+   * only ever a live-converted display figure, never stored) — kept as its
+   * own field, separate from annual_cost/commission_usd, since a Lifetime
+   * email has no commission concept: this figure alone is both its cost
+   * and its price to the client. 0 and unused for a recurring email. */
+  lifetime_cost: number;
   /** A percentage discount: for a recurring email, off commission_usd only
    * (never annual_cost). For a Lifetime email (no commission concept), off
-   * lifetime_cost_egp directly. */
+   * lifetime_cost directly. */
   discount_percent: number;
   mailboxes: EmailMailbox[];
   notes: string | null;

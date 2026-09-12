@@ -7,22 +7,34 @@ import {
   Mail,
   Server,
   Share2,
+  TrendingUp,
   Users,
   Wallet,
   XCircle,
 } from "lucide-react";
 import { PageTransition } from "@/components/shared/PageTransition";
 import { StatCard } from "@/components/overview/StatCard";
-import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/Card";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/Card";
 import { StatCardSkeleton, TableSkeleton } from "@/components/ui/Skeleton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { useOverviewData } from "@/hooks/useOverviewData";
-import { formatCurrency } from "@/utils/format";
+import { formatCurrency, formatEgp } from "@/utils/format";
 import { getRenewalInfo, formatDate, daysRemainingLabel } from "@/utils/dates";
+import { NET_PROFIT_DEDUCTION_PERCENT } from "@/utils/constants";
 import { cn } from "@/lib/utils";
 
-const KIND_ICON = { domain: Globe, hosting: Server, email: Mail, shared_hosting: Share2 } as const;
+const KIND_ICON = {
+  domain: Globe,
+  hosting: Server,
+  email: Mail,
+  shared_hosting: Share2,
+} as const;
 const KIND_LABEL = {
   domain: "Domain",
   hosting: "Hosting",
@@ -48,6 +60,8 @@ export default function OverviewPage() {
     financials,
     upcomingRenewals,
     sharedHostingUsage,
+    profitStats,
+    egpRate,
   } = useOverviewData();
   const navigate = useNavigate();
 
@@ -59,10 +73,17 @@ export default function OverviewPage() {
           <SectionHeading title="Business at a Glance" />
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
             {loading ? (
-              Array.from({ length: 5 }).map((_, i) => <StatCardSkeleton key={i} />)
+              Array.from({ length: 5 }).map((_, i) => (
+                <StatCardSkeleton key={i} />
+              ))
             ) : (
               <>
-                <StatCard label="Total Clients" value={totalClients} icon={Users} index={0} />
+                <StatCard
+                  label="Total Clients"
+                  value={totalClients}
+                  icon={Users}
+                  index={0}
+                />
                 <StatCard
                   label="Total Domains"
                   value={domainStats.total}
@@ -104,7 +125,9 @@ export default function OverviewPage() {
           />
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
             {loading ? (
-              Array.from({ length: 5 }).map((_, i) => <StatCardSkeleton key={i} />)
+              Array.from({ length: 5 }).map((_, i) => (
+                <StatCardSkeleton key={i} />
+              ))
             ) : (
               <>
                 <StatCard
@@ -146,15 +169,17 @@ export default function OverviewPage() {
           </div>
         </section>
 
-        {/* Financial analytics */}
+        {/* Secondary expenses */}
         <section>
           <SectionHeading
-            title="Financial Analytics"
+            title="Secondary Expenses"
             description="Annual infrastructure cost, kept simple"
           />
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
             {loading ? (
-              Array.from({ length: 5 }).map((_, i) => <StatCardSkeleton key={i} />)
+              Array.from({ length: 5 }).map((_, i) => (
+                <StatCardSkeleton key={i} />
+              ))
             ) : (
               <>
                 <StatCard
@@ -217,13 +242,111 @@ export default function OverviewPage() {
           </div>
         </section>
 
+        {/* Financial Analytics */}
+        <section>
+          <SectionHeading
+            title="Financial Analytics"
+            description="Revenue, cost, and profit across every client service"
+          />
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+            {loading || !profitStats ? (
+              Array.from({ length: 5 }).map((_, i) => (
+                <StatCardSkeleton key={i} />
+              ))
+            ) : (
+              <>
+                <StatCard
+                  label="Revenue"
+                  value={
+                    egpRate !== null
+                      ? formatEgp(profitStats.revenueUsd * egpRate)
+                      : formatCurrency(profitStats.revenueUsd)
+                  }
+                  icon={DollarSign}
+                  index={0}
+                  subtext={
+                    egpRate !== null
+                      ? `≈ ${formatCurrency(profitStats.revenueUsd)}`
+                      : undefined
+                  }
+                />
+                <StatCard
+                  label="Net Revenue"
+                  value={
+                    egpRate !== null
+                      ? formatEgp(profitStats.netRevenueUsd * egpRate)
+                      : formatCurrency(profitStats.netRevenueUsd)
+                  }
+                  icon={DollarSign}
+                  index={1}
+                  subtext={
+                    egpRate !== null
+                      ? `≈ ${formatCurrency(profitStats.netRevenueUsd)}`
+                      : undefined
+                  }
+                />
+                <StatCard
+                  label="COGS"
+                  value={
+                    egpRate !== null
+                      ? formatEgp(profitStats.cogsUsd * egpRate)
+                      : formatCurrency(profitStats.cogsUsd)
+                  }
+                  icon={Wallet}
+                  index={2}
+                  subtext={
+                    egpRate !== null
+                      ? `≈ ${formatCurrency(profitStats.cogsUsd)}`
+                      : undefined
+                  }
+                />
+                <StatCard
+                  label="Gross Profit"
+                  value={
+                    egpRate !== null
+                      ? formatEgp(profitStats.grossProfitUsd * egpRate)
+                      : formatCurrency(profitStats.grossProfitUsd)
+                  }
+                  icon={TrendingUp}
+                  tone={profitStats.grossProfitUsd >= 0 ? "emerald" : "red"}
+                  index={3}
+                  subtext={
+                    egpRate !== null
+                      ? `≈ ${formatCurrency(profitStats.grossProfitUsd)}`
+                      : undefined
+                  }
+                />
+                <StatCard
+                  label="Net Profit"
+                  value={
+                    egpRate !== null
+                      ? formatEgp(profitStats.netProfitUsd * egpRate)
+                      : formatCurrency(profitStats.netProfitUsd)
+                  }
+                  icon={TrendingUp}
+                  tone={profitStats.netProfitUsd >= 0 ? "emerald" : "red"}
+                  index={4}
+                  subtext={
+                    `After ${NET_PROFIT_DEDUCTION_PERCENT}% deduction` +
+                    (egpRate !== null
+                      ? ` · ≈ ${formatCurrency(profitStats.netProfitUsd)}`
+                      : "")
+                  }
+                />
+              </>
+            )}
+          </div>
+        </section>
+
         {/* Upcoming renewals table */}
         <section>
           <Card className="overflow-hidden">
             <CardHeader>
               <div>
                 <CardTitle>Upcoming Renewals</CardTitle>
-                <CardDescription>Closest expiration dates across all services</CardDescription>
+                <CardDescription>
+                  Closest expiration dates across all services
+                </CardDescription>
               </div>
             </CardHeader>
 
@@ -241,16 +364,22 @@ export default function OverviewPage() {
                   <table className="w-full min-w-[820px] border-collapse text-sm">
                     <thead>
                       <tr className="border-b border-slate-100 dark:border-slate-800">
-                        {["Client", "Service", "Provider", "Expiration Date", "Days Remaining", "Annual Cost", "Status"].map(
-                          (h) => (
-                            <th
-                              key={h}
-                              className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400"
-                            >
-                              {h}
-                            </th>
-                          )
-                        )}
+                        {[
+                          "Client",
+                          "Service",
+                          "Provider",
+                          "Expiration Date",
+                          "Days Remaining",
+                          "Annual Cost",
+                          "Status",
+                        ].map((h) => (
+                          <th
+                            key={h}
+                            className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400"
+                          >
+                            {h}
+                          </th>
+                        ))}
                       </tr>
                     </thead>
                     <tbody>
@@ -270,7 +399,9 @@ export default function OverviewPage() {
                                 <Icon className="h-4 w-4 shrink-0 text-slate-400" />
                                 <div>
                                   <p>{r.serviceName}</p>
-                                  <p className="text-xs text-slate-400">{KIND_LABEL[r.kind]}</p>
+                                  <p className="text-xs text-slate-400">
+                                    {KIND_LABEL[r.kind]}
+                                  </p>
                                 </div>
                               </div>
                             </td>
@@ -286,8 +417,8 @@ export default function OverviewPage() {
                                 r.renewal.daysRemaining < 0
                                   ? "text-slate-500"
                                   : r.renewal.daysRemaining <= 7
-                                  ? "text-red-600 dark:text-red-400"
-                                  : "text-slate-700 dark:text-slate-300"
+                                    ? "text-red-600 dark:text-red-400"
+                                    : "text-slate-700 dark:text-slate-300",
                               )}
                             >
                               {daysRemainingLabel(r.renewal.daysRemaining)}
@@ -376,16 +507,20 @@ export default function OverviewPage() {
                   <table className="w-full min-w-[720px] border-collapse text-sm">
                     <thead>
                       <tr className="border-b border-slate-100 dark:border-slate-800">
-                        {["Plan", "Provider", "Expiration Date", "Status", "Clients Using It"].map(
-                          (h) => (
-                            <th
-                              key={h}
-                              className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400"
-                            >
-                              {h}
-                            </th>
-                          )
-                        )}
+                        {[
+                          "Plan",
+                          "Provider",
+                          "Expiration Date",
+                          "Status",
+                          "Clients Using It",
+                        ].map((h) => (
+                          <th
+                            key={h}
+                            className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400"
+                          >
+                            {h}
+                          </th>
+                        ))}
                       </tr>
                     </thead>
                     <tbody>
@@ -405,11 +540,15 @@ export default function OverviewPage() {
                             {formatDate(plan.expiration_date)}
                           </td>
                           <td className="px-5 py-3.5">
-                            <StatusBadge renewal={getRenewalInfo(plan.expiration_date)} />
+                            <StatusBadge
+                              renewal={getRenewalInfo(plan.expiration_date)}
+                            />
                           </td>
                           <td className="px-5 py-3.5 text-slate-700 dark:text-slate-300">
                             {clientNames.length === 0 ? (
-                              <span className="text-slate-400">No clients linked yet</span>
+                              <span className="text-slate-400">
+                                No clients linked yet
+                              </span>
                             ) : (
                               <div className="flex flex-wrap gap-1.5">
                                 {clientNames.map((name) => (
@@ -441,16 +580,22 @@ export default function OverviewPage() {
                           <p className="font-semibold text-slate-900 dark:text-slate-100">
                             {plan.name}
                           </p>
-                          <p className="text-xs text-slate-400">{plan.provider}</p>
+                          <p className="text-xs text-slate-400">
+                            {plan.provider}
+                          </p>
                         </div>
-                        <StatusBadge renewal={getRenewalInfo(plan.expiration_date)} />
+                        <StatusBadge
+                          renewal={getRenewalInfo(plan.expiration_date)}
+                        />
                       </div>
                       <p className="mt-2 text-xs text-slate-400">
                         Expires {formatDate(plan.expiration_date)}
                       </p>
                       <div className="mt-3 flex flex-wrap gap-1.5">
                         {clientNames.length === 0 ? (
-                          <span className="text-xs text-slate-400">No clients linked yet</span>
+                          <span className="text-xs text-slate-400">
+                            No clients linked yet
+                          </span>
                         ) : (
                           clientNames.map((name) => (
                             <span
@@ -474,12 +619,22 @@ export default function OverviewPage() {
   );
 }
 
-function SectionHeading({ title, description }: { title: string; description?: string }) {
+function SectionHeading({
+  title,
+  description,
+}: {
+  title: string;
+  description?: string;
+}) {
   return (
     <div className="mb-4">
-      <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">{title}</h2>
+      <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
+        {title}
+      </h2>
       {description && (
-        <p className="text-sm text-slate-500 dark:text-slate-400">{description}</p>
+        <p className="text-sm text-slate-500 dark:text-slate-400">
+          {description}
+        </p>
       )}
     </div>
   );

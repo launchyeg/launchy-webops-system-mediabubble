@@ -33,7 +33,7 @@ import { deleteDomain, listDomainsByClient } from "@/services/domains.service";
 import { deleteHosting, listHostingByClient } from "@/services/hosting.service";
 import { deleteEmail, listEmailsByClient } from "@/services/emails.service";
 import { getRenewalInfo, formatDate } from "@/utils/dates";
-import { formatCurrency, formatEgp } from "@/utils/format";
+import { formatCurrency } from "@/utils/format";
 import { applyDiscount } from "@/utils/pricing";
 import { cn } from "@/lib/utils";
 import type {
@@ -260,12 +260,15 @@ export default function ClientDetailsPage() {
                   title={h.account_name}
                   subtitle={h.provider}
                   expirationDate={h.expiration_date}
-                  annualCost={h.annual_cost}
-                  commissionUsd={applyDiscount(h.commission_usd, h.discount_percent)}
-                  egpCost={
+                  annualCost={
                     h.host_type === "shared"
-                      ? applyDiscount(h.annual_cost_egp, h.discount_percent)
-                      : undefined
+                      ? applyDiscount(h.shared_annual_cost, h.discount_percent)
+                      : h.annual_cost
+                  }
+                  commissionUsd={
+                    h.host_type === "shared"
+                      ? 0
+                      : applyDiscount(h.commission_usd, h.discount_percent)
                   }
                   extra={
                     h.host_type === "private" ? (
@@ -333,14 +336,15 @@ export default function ClientDetailsPage() {
                   title={e.email_account}
                   subtitle={e.provider}
                   expirationDate={e.expiration_date}
-                  annualCost={e.annual_cost}
-                  commissionUsd={applyDiscount(e.commission_usd, e.discount_percent)}
-                  isLifetime={e.is_lifetime}
-                  egpCost={
+                  annualCost={
                     e.is_lifetime
-                      ? applyDiscount(e.lifetime_cost_egp, e.discount_percent)
-                      : undefined
+                      ? applyDiscount(e.lifetime_cost, e.discount_percent)
+                      : e.annual_cost
                   }
+                  commissionUsd={
+                    e.is_lifetime ? 0 : applyDiscount(e.commission_usd, e.discount_percent)
+                  }
+                  isLifetime={e.is_lifetime}
                   extra={
                     <>
                       {e.domain_id && domainNameById.has(e.domain_id) && (
@@ -480,7 +484,6 @@ function ServiceRow({
   annualCost,
   commissionUsd,
   isLifetime,
-  egpCost,
   extra,
   onEdit,
   onDelete,
@@ -490,12 +493,10 @@ function ServiceRow({
   expirationDate: string | null;
   annualCost: number;
   /** Added to annualCost for the displayed Final Price — omitted (or 0) for
-   * a row with no commission concept, e.g. a Shared Host priced in EGP. */
+   * a row with no commission concept, e.g. a Shared Host or Lifetime email
+   * (whose discount is pre-applied to annualCost by the caller instead). */
   commissionUsd?: number;
   isLifetime?: boolean;
-  /** When set, shown instead of the computed USD Final Price — a Lifetime
-   * email's one-time cost, or a Shared Host's recurring EGP cost. */
-  egpCost?: number;
   /** Extra detail lines rendered under the subtitle — differs per service
    * type (linked domain/notes for Email, email/website count for Hosting,
    * account email/notes for Domain). */
@@ -516,9 +517,8 @@ function ServiceRow({
             {isLifetime ? "Never expires" : formatDate(expirationDate)}
           </p>
           <p className="text-xs text-slate-400">
-            {egpCost !== undefined
-              ? `${formatEgp(egpCost)}${isLifetime ? "" : "/yr"}`
-              : `${formatCurrency(annualCost + (commissionUsd ?? 0))}/yr`}
+            {formatCurrency(annualCost + (commissionUsd ?? 0))}
+            {isLifetime ? "" : "/yr"}
           </p>
         </div>
         {isLifetime ? (

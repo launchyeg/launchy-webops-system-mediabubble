@@ -144,19 +144,10 @@ function ClientGroupCard({
   onView?: () => void;
 }) {
   const isUnassigned = !group.client;
-  // A blended total across both currencies: USD-priced services converted
-  // into the EGP figure, and the Shared Host EGP total converted into the
-  // USD figure — each is the same combined total, just expressed in its
-  // own currency. Falls back to USD-only (its pre-conversion shape) while
-  // the rate is still loading or unavailable.
-  const totalUsd =
-    egpRate !== null
-      ? group.totalAnnualCostUsd + group.totalAnnualCostEgp / egpRate
-      : group.totalAnnualCostUsd;
-  const totalEgp =
-    egpRate !== null
-      ? group.totalAnnualCostEgp + group.totalAnnualCostUsd * egpRate
-      : null;
+  // Every service's total is now USD-native; EGP is only ever a
+  // live-converted secondary figure, shown once the rate is available.
+  const totalUsd = group.totalAnnualCostUsd;
+  const totalEgp = egpRate !== null ? group.totalAnnualCostUsd * egpRate : null;
 
   return (
     <Card className="overflow-hidden">
@@ -309,34 +300,20 @@ function DetailRow({
   const name =
     "domain_name" in data ? data.domain_name : "account_name" in data ? data.account_name : data.email_account;
   const isLifetime = "is_lifetime" in data && data.is_lifetime;
-  const isSharedHost = "host_type" in data && data.host_type === "shared";
-  // Lifetime email: one-time EGP cost (its own discount, no commission
-  // concept), no "/yr". Shared Host: recurring EGP cost (its own discount,
-  // no commission concept), gets "/yr". Everything else: USD final price
-  // (base + discounted commission).
-  const egpCost = isLifetime
-    ? "lifetime_cost_egp" in data
-      ? applyDiscount(data.lifetime_cost_egp, data.discount_percent)
-      : 0
-    : isSharedHost
-      ? "annual_cost_egp" in data && "discount_percent" in data
-        ? applyDiscount(data.annual_cost_egp, data.discount_percent)
-        : 0
-      : undefined;
+  // Every price is USD-native now. Shared Host and Lifetime email have no
+  // commission concept — each has its own separate cost field, discounted
+  // directly. Domain, Private-host, and recurring-email discounts come off
+  // commission_usd only.
+  const usd =
+    "host_type" in data && data.host_type === "shared"
+      ? applyDiscount(data.shared_annual_cost, data.discount_percent)
+      : "is_lifetime" in data && data.is_lifetime
+        ? applyDiscount(data.lifetime_cost, data.discount_percent)
+        : data.annual_cost + applyDiscount(data.commission_usd, data.discount_percent);
 
   const suffix = isLifetime ? "" : "/yr";
-  let priceText: string;
-  let convertedText: string | null = null;
-  if (egpCost !== undefined) {
-    priceText = `${formatEgp(egpCost)}${suffix}`;
-    if (egpRate !== null) convertedText = `${formatCurrency(egpCost / egpRate)}${suffix}`;
-  } else {
-    // Domain, Private-host, and recurring-email commissions all carry a
-    // discount now.
-    const usd = data.annual_cost + applyDiscount(data.commission_usd, data.discount_percent);
-    priceText = `${formatCurrency(usd)}${suffix}`;
-    if (egpRate !== null) convertedText = `${formatEgp(usd * egpRate)}${suffix}`;
-  }
+  const priceText = `${formatCurrency(usd)}${suffix}`;
+  const convertedText = egpRate !== null ? `${formatEgp(usd * egpRate)}${suffix}` : null;
 
   return (
     <div className="flex flex-col gap-2 px-5 py-3 pl-12 sm:flex-row sm:items-center sm:justify-between">

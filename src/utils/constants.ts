@@ -32,3 +32,8 @@ export const EMAIL_PROVIDERS: EmailProvider[] = [
 ];
 
 export const RENEWAL_WINDOWS = [30, 21, 14, 7] as const;
+
+/** The percentage deducted from Gross Profit to arrive at Net Profit, on
+ * the Overview page's "Financial Analytics" section. Change this single
+ * number whenever the actual rate changes. */
+export const NET_PROFIT_DEDUCTION_PERCENT = 5;

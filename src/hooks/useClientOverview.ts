@@ -33,12 +33,10 @@ export interface ClientOverviewGroup {
   emails: EmailWithClient[];
   serviceCount: number;
   /** Sum of every USD-priced service's final price (base + commission):
-   * domains, Private hosting, and recurring (non-Lifetime) email. */
+   * domains, Private hosting, Shared hosting (discounted annual_cost, no
+   * commission), and recurring (non-Lifetime) email. A Lifetime email's
+   * one-time cost is excluded — it's not a recurring annual cost. */
   totalAnnualCostUsd: number;
-  /** Sum of every Shared Host's recurring annual_cost_egp. A Lifetime
-   * email's one-time EGP cost is excluded from both totals — it's not a
-   * recurring annual cost. */
-  totalAnnualCostEgp: number;
   worstTier: RenewalTier | null;
 }
 
@@ -67,7 +65,6 @@ export function useClientOverview() {
       emails: [],
       serviceCount: 0,
       totalAnnualCostUsd: 0,
-      totalAnnualCostEgp: 0,
       worstTier: null,
     });
 
@@ -103,17 +100,16 @@ export function useClientOverview() {
           (sum, h) => sum + h.annual_cost + applyDiscount(h.commission_usd, h.discount_percent),
           0
         ) +
+        // Shared hosting has no commission concept — its own
+        // shared_annual_cost field, discounted directly.
+        sharedHosting.reduce(
+          (sum, h) => sum + applyDiscount(h.shared_annual_cost, h.discount_percent),
+          0
+        ) +
         recurringEmails.reduce(
           (sum, e) => sum + e.annual_cost + applyDiscount(e.commission_usd, e.discount_percent),
           0
         );
-
-      // A Lifetime email's one-time EGP cost isn't a recurring annual
-      // cost, so it's excluded here (and everywhere else in the app).
-      g.totalAnnualCostEgp = sharedHosting.reduce(
-        (sum, h) => sum + applyDiscount(h.annual_cost_egp, h.discount_percent),
-        0
-      );
 
       // A lifetime email (null expiration_date) never contributes to the
       // worst tier, but its mere presence still means this client has at

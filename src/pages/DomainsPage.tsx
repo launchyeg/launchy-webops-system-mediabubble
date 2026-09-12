@@ -37,9 +37,14 @@ export default function DomainsPage() {
   const [deleting, setDeleting] = useState(false);
 
   const providers = useMemo(() => {
-    const set = new Set<string>(DOMAIN_PROVIDERS.filter((p) => p !== "Other"));
-    domains.forEach((d) => set.add(d.provider));
-    return Array.from(set).sort();
+    // Known presets keep DOMAIN_PROVIDERS' own order; any custom provider
+    // typed via "Other" (not in that list) is appended after, alphabetized.
+    const known = DOMAIN_PROVIDERS.filter((p) => p !== "Other");
+    const knownSet = new Set<string>(known);
+    const extra = Array.from(
+      new Set(domains.map((d) => d.provider).filter((p) => !knownSet.has(p)))
+    ).sort();
+    return [...known, ...extra];
   }, [domains]);
 
   const filtered = useMemo(() => {
