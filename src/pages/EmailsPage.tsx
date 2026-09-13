@@ -16,7 +16,7 @@ import { useToast } from "@/contexts/ToastContext";
 import { deleteEmail } from "@/services/emails.service";
 import { getRenewalInfo, formatDate, daysRemainingLabel } from "@/utils/dates";
 import { formatCurrency } from "@/utils/format";
-import { applyDiscount } from "@/utils/pricing";
+import { applyDiscount, withBankFee } from "@/utils/pricing";
 import { EMAIL_PROVIDERS } from "@/utils/constants";
 import type { EmailWithClient } from "@/types";
 
@@ -156,7 +156,7 @@ export default function EmailsPage() {
       render: (e) =>
         e.is_lifetime
           ? formatCurrency(applyDiscount(e.lifetime_cost, e.discount_percent))
-          : `${formatCurrency(e.annual_cost + applyDiscount(e.commission_usd, e.discount_percent))}/yr`,
+          : `${formatCurrency(withBankFee(e.annual_cost) + applyDiscount(e.commission_usd, e.discount_percent))}/yr`,
     },
     {
       key: "status",
@@ -283,7 +283,7 @@ export default function EmailsPage() {
                   <p className="font-medium text-slate-900 dark:text-slate-100">
                     {e.is_lifetime
                       ? formatCurrency(applyDiscount(e.lifetime_cost, e.discount_percent))
-                      : `${formatCurrency(e.annual_cost + applyDiscount(e.commission_usd, e.discount_percent))}/yr`}
+                      : `${formatCurrency(withBankFee(e.annual_cost) + applyDiscount(e.commission_usd, e.discount_percent))}/yr`}
                   </p>
                 </div>
                 <div className="mt-3 flex justify-end gap-1">

@@ -12,7 +12,7 @@ import { getRenewalInfo, renewalTierToServiceStatus } from "@/utils/dates";
 import { DOMAIN_PROVIDERS } from "@/utils/constants";
 import { useUsdToEgpRate } from "@/hooks/useUsdToEgpRate";
 import { formatCurrency, formatEgp } from "@/utils/format";
-import { applyDiscount } from "@/utils/pricing";
+import { applyDiscount, withBankFee } from "@/utils/pricing";
 import type { ClientRow, DomainWithClient } from "@/types";
 
 interface DomainFormModalProps {
@@ -52,6 +52,14 @@ export function DomainFormModal({
   const { rate: egpRate } = useUsdToEgpRate();
 
   const annualCostUsd = Number(form.annual_cost) || 0;
+  // The bank charges its own card-payment fee on top of the registrar's
+  // price — a real cost, not a markup. It's folded in here, before
+  // commission, so it becomes part of the "full domain price" everywhere
+  // downstream (Final Price, Secondary Expenses, Financial Analytics).
+  // annual_cost itself keeps storing the raw, pre-fee figure typed below —
+  // see the payload in handleSubmit.
+  const annualCostWithFeeUsd = withBankFee(annualCostUsd);
+  const bankFeeUsd = annualCostWithFeeUsd - annualCostUsd;
   const commissionUsd = Number(form.commission_usd) || 0;
   const discountPercent = Math.min(
     100,
@@ -60,7 +68,7 @@ export function DomainFormModal({
   const discountAmountUsd =
     commissionUsd - applyDiscount(commissionUsd, discountPercent);
   const netCommissionUsd = commissionUsd - discountAmountUsd;
-  const finalPriceUsd = annualCostUsd + netCommissionUsd;
+  const finalPriceUsd = annualCostWithFeeUsd + netCommissionUsd;
 
   useEffect(() => {
     if (!open) return;
@@ -106,7 +114,7 @@ export function DomainFormModal({
             discount_percent: "0",
             auto_renewal: false,
           }
-        : { ...f, provider: v }
+        : { ...f, provider: v },
     );
 
   const handleSubmit = async (e: FormEvent) => {
@@ -124,6 +132,11 @@ export function DomainFormModal({
         expiration_date: form.expiration_date,
         auto_renewal: form.auto_renewal,
         account_email: form.account_email.trim() || null,
+        // The raw, pre-bank-fee cost — exactly what was typed above. The
+        // 5% fee is applied fresh wherever annual_cost is read (Final
+        // Price, Secondary Expenses, Financial Analytics — see
+        // withBankFee in utils/pricing.ts) rather than stored here, so
+        // re-saving this same domain later never compounds the fee.
         annual_cost: Number(form.annual_cost) || 0,
         commission_usd: Number(form.commission_usd) || 0,
         discount_percent: discountPercent,
@@ -202,6 +215,7 @@ export function DomainFormModal({
             label="Expiration Date"
             type="date"
             required
+            hint="Drives this domain's renewal status badge and its place."
             value={form.expiration_date}
             onChange={(e) =>
               setForm((f) => ({ ...f, expiration_date: e.target.value }))
@@ -213,6 +227,7 @@ export function DomainFormModal({
             min="0"
             step="0.01"
             required
+            hint="Registrar's price only — the 5% bank fee is added automatically."
             value={form.annual_cost}
             onChange={(e) =>
               setForm((f) => ({ ...f, annual_cost: e.target.value }))
@@ -271,6 +286,10 @@ export function DomainFormModal({
               <div className="flex justify-between gap-2">
                 <dt>Domain price</dt>
                 <dd>{formatEgp(annualCostUsd * egpRate)}</dd>
+              </div>
+              <div className="flex justify-between gap-2">
+                <dt>Bank fee (5%)</dt>
+                <dd>{formatEgp(bankFeeUsd * egpRate)}</dd>
               </div>
               <div className="flex justify-between gap-2">
                 <dt>Commission</dt>

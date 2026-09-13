@@ -22,7 +22,7 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { useUsdToEgpRate } from "@/hooks/useUsdToEgpRate";
 import { getRenewalInfo, formatDate } from "@/utils/dates";
 import { formatCurrency, formatEgp } from "@/utils/format";
-import { applyDiscount } from "@/utils/pricing";
+import { applyDiscount, withBankFee } from "@/utils/pricing";
 import { cn } from "@/lib/utils";
 import type { DomainWithClient, HostingWithClient, EmailWithClient } from "@/types";
 
@@ -303,13 +303,16 @@ function DetailRow({
   // Every price is USD-native now. Shared Host and Lifetime email have no
   // commission concept — each has its own separate cost field, discounted
   // directly. Domain, Private-host, and recurring-email discounts come off
-  // commission_usd only.
+  // commission_usd only. Domain, Private host, and recurring email base
+  // costs also include the bank's 5% card-payment fee (see withBankFee in
+  // utils/pricing.ts); Shared Host's shared_annual_cost and a Lifetime
+  // email's lifetime_cost carry no such fee.
   const usd =
     "host_type" in data && data.host_type === "shared"
       ? applyDiscount(data.shared_annual_cost, data.discount_percent)
       : "is_lifetime" in data && data.is_lifetime
         ? applyDiscount(data.lifetime_cost, data.discount_percent)
-        : data.annual_cost + applyDiscount(data.commission_usd, data.discount_percent);
+        : withBankFee(data.annual_cost) + applyDiscount(data.commission_usd, data.discount_percent);
 
   const suffix = isLifetime ? "" : "/yr";
   const priceText = `${formatCurrency(usd)}${suffix}`;

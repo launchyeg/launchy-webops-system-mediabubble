@@ -21,7 +21,7 @@ import { useUsdToEgpRate } from "@/hooks/useUsdToEgpRate";
 import { useDomains } from "@/hooks/useDomains";
 import { useSharedHosting } from "@/hooks/useSharedHosting";
 import { formatCurrency, formatEgp } from "@/utils/format";
-import { applyDiscount } from "@/utils/pricing";
+import { applyDiscount, withBankFee } from "@/utils/pricing";
 import { cn } from "@/lib/utils";
 import type { ClientRow, HostingWithClient, HostType } from "@/types";
 
@@ -78,6 +78,14 @@ export function HostingFormModal({
   );
 
   const annualCostUsd = Number(form.annual_cost) || 0;
+  // Private hosting pays the same bank card-payment fee a domain does — a
+  // real cost, not a markup — folded in before commission so it becomes
+  // part of the "full price" everywhere downstream. Shared hosting has no
+  // such fee; shared_annual_cost is untouched. annual_cost itself keeps
+  // storing the raw, pre-fee figure typed below — see the payload in
+  // handleSubmit.
+  const annualCostWithFeeUsd = withBankFee(annualCostUsd);
+  const bankFeeUsd = annualCostWithFeeUsd - annualCostUsd;
   const commissionUsd = Number(form.commission_usd) || 0;
   const sharedAnnualCostUsd = Number(form.shared_annual_cost) || 0;
   const discountPercent = Math.min(
@@ -97,7 +105,7 @@ export function HostingFormModal({
   const finalPriceUsd =
     form.host_type === "shared"
       ? netSharedAnnualCostUsd
-      : annualCostUsd + netCommissionUsd;
+      : annualCostWithFeeUsd + netCommissionUsd;
 
   useEffect(() => {
     if (!open) return;
@@ -187,7 +195,7 @@ export function HostingFormModal({
             discount_percent: "0",
             auto_renewal: false,
           }
-        : { ...f, provider: v }
+        : { ...f, provider: v },
     );
 
   const addDomainRow = () =>
@@ -239,6 +247,11 @@ export function HostingFormModal({
         expiration_date: form.expiration_date,
         auto_renewal: form.auto_renewal,
         account_email: form.account_email.trim() || null,
+        // The raw, pre-bank-fee cost — exactly what was typed below. The
+        // 5% fee is applied fresh wherever annual_cost is read (Final
+        // Price, Secondary Expenses, Financial Analytics — see
+        // withBankFee in utils/pricing.ts) rather than stored here, so
+        // re-saving this same account later never compounds the fee.
         annual_cost: form.host_type === "shared" ? 0 : annualCostUsd,
         commission_usd: form.host_type === "shared" ? 0 : commissionUsd,
         shared_annual_cost:
@@ -458,6 +471,7 @@ export function HostingFormModal({
               label="Expiration Date"
               type="date"
               required
+              hint="Drives this renewal status badge and its place in Upcoming Renewals."
               value={form.expiration_date}
               onChange={(e) =>
                 setForm((f) => ({ ...f, expiration_date: e.target.value }))
@@ -470,7 +484,7 @@ export function HostingFormModal({
                 min="0"
                 step="0.01"
                 required
-                hint="Your company's fee for managing this hosting account, on top of the annual cost."
+                hint="Managing hosting account & annual cost."
                 value={form.shared_annual_cost}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, shared_annual_cost: e.target.value }))
@@ -503,6 +517,7 @@ export function HostingFormModal({
                 label="Expiration Date"
                 type="date"
                 required
+                hint="Drives this renewal status badge and its place in Upcoming Renewals."
                 value={form.expiration_date}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, expiration_date: e.target.value }))
@@ -514,6 +529,7 @@ export function HostingFormModal({
                 min="0"
                 step="0.01"
                 required
+                hint="Host's price only — the 5% bank fee is added automatically."
                 value={form.annual_cost}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, annual_cost: e.target.value }))
@@ -526,7 +542,7 @@ export function HostingFormModal({
                 type="number"
                 min="0"
                 step="0.01"
-                hint="Your company's fee for managing this hosting account, on top of the annual cost."
+                hint="Fee for managing this hosting account."
                 value={form.commission_usd}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, commission_usd: e.target.value }))
@@ -570,6 +586,10 @@ export function HostingFormModal({
               <div className="flex justify-between gap-2">
                 <dt>Hosting price</dt>
                 <dd>{formatEgp(annualCostUsd * egpRate)}</dd>
+              </div>
+              <div className="flex justify-between gap-2">
+                <dt>Bank fee (5%)</dt>
+                <dd>{formatEgp(bankFeeUsd * egpRate)}</dd>
               </div>
               <div className="flex justify-between gap-2">
                 <dt>Commission</dt>

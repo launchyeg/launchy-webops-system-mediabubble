@@ -413,7 +413,16 @@ create policy "Authenticated users can delete shared_hosting"
 -- for a future scheduled job (Supabase Edge Function + pg_cron, or an
 -- external scheduler) to query everything expiring within the 21/14/7-day
 -- windows across all three service types, ready to notify clients over
--- WhatsApp/SMS/Email once that channel is built.
+-- WhatsApp/SMS/Email once that channel is built. `expiration_date` is
+-- already included below for exactly that purpose.
+--
+-- Note for whoever builds that notification: this view's `annual_cost` is
+-- the raw, pre-fee cost, same as the underlying domains/hosting/emails
+-- tables. For a domain or Private hosting row (service_kind), the app's
+-- own UI adds a 5% bank card-payment fee on top of this figure wherever it
+-- shows a client-facing price (see withBankFee in src/utils/pricing.ts) —
+-- multiply accordingly if this view ever needs to state what a client
+-- actually owes, rather than just the underlying registrar/host cost.
 -- ============================================================================
 create or replace view upcoming_renewals as
   select

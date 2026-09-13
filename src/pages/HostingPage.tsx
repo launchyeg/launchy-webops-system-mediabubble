@@ -16,7 +16,7 @@ import { useToast } from "@/contexts/ToastContext";
 import { deleteHosting } from "@/services/hosting.service";
 import { getRenewalInfo, formatDate, daysRemainingLabel } from "@/utils/dates";
 import { formatCurrency } from "@/utils/format";
-import { applyDiscount } from "@/utils/pricing";
+import { applyDiscount, withBankFee } from "@/utils/pricing";
 import { HOSTING_PROVIDERS } from "@/utils/constants";
 import type { HostingWithDomains } from "@/types";
 
@@ -166,7 +166,7 @@ export default function HostingPage() {
       render: (h) =>
         h.host_type === "shared"
           ? `${formatCurrency(applyDiscount(h.shared_annual_cost, h.discount_percent))}/yr`
-          : `${formatCurrency(h.annual_cost + applyDiscount(h.commission_usd, h.discount_percent))}/yr`,
+          : `${formatCurrency(withBankFee(h.annual_cost) + applyDiscount(h.commission_usd, h.discount_percent))}/yr`,
     },
     {
       key: "status",
@@ -301,7 +301,7 @@ export default function HostingPage() {
                   <p className="font-medium text-slate-900 dark:text-slate-100">
                     {h.host_type === "shared"
                       ? `${formatCurrency(applyDiscount(h.shared_annual_cost, h.discount_percent))}/yr`
-                      : `${formatCurrency(h.annual_cost + applyDiscount(h.commission_usd, h.discount_percent))}/yr`}
+                      : `${formatCurrency(withBankFee(h.annual_cost) + applyDiscount(h.commission_usd, h.discount_percent))}/yr`}
                   </p>
                 </div>
                 <div className="mt-3 flex justify-end gap-1">

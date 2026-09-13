@@ -6,8 +6,7 @@ import { useEmails } from "./useEmails";
 import { useSharedHosting } from "./useSharedHosting";
 import { useUsdToEgpRate } from "./useUsdToEgpRate";
 import { getRenewalInfo } from "@/utils/dates";
-import { applyDiscount } from "@/utils/pricing";
-import { NET_PROFIT_DEDUCTION_PERCENT } from "@/utils/constants";
+import { applyDiscount, withBankFee } from "@/utils/pricing";
 import type { SharedHostingRow, UpcomingRenewal } from "@/types";
 
 export interface ServiceBucketStats {
@@ -55,15 +54,25 @@ export interface ProfitStats {
   /** Same services, after each one's own discount is applied. */
   netRevenueUsd: number;
   /** The mandatory cost the company itself pays: domains'/Private
-   * hosting's/emails' own annual_cost, plus every Shared Hosting plan's
-   * annual_cost (the plan's cost is fixed regardless of how many clients
-   * are on it — unlike Private hosting, a Shared Host has no per-client
-   * commission; its margin is the spread between what clients on it are
-   * charged and what the plan itself costs). */
+   * hosting's/recurring emails' own annual_cost, plus every Shared Hosting
+   * plan's own annual_cost — each of these including the bank's 5%
+   * card-payment fee (see withBankFee in utils/pricing.ts), since each is
+   * a direct payment the company makes (the plan's cost is fixed regardless
+   * of how many clients are on it — unlike Private hosting, a Shared Host
+   * has no per-client commission; its margin is the spread between what
+   * clients on it are charged and what the plan itself costs, so its fee
+   * isn't recovered from clients the way the others' is). A Lifetime
+   * email's lifetime_cost has no bank fee and no tracked cost basis at all
+   * — it contributes nothing here. */
   cogsUsd: number;
   /** netRevenueUsd - cogsUsd. */
   grossProfitUsd: number;
-  /** grossProfitUsd after the NET_PROFIT_DEDUCTION_PERCENT cut. */
+  /** Equal to grossProfitUsd — there's no further flat cut applied here.
+   * (An earlier flat "Total Taxes" deduction used to reduce this below
+   * Gross Profit, but it's been removed: the bank's 5% card fee it was
+   * meant to represent is now already priced into each service's own
+   * final price — see withBankFee in utils/pricing.ts — rather than
+   * approximated as a blanket cut here.) */
   netProfitUsd: number;
 }
 
@@ -155,10 +164,10 @@ export function useOverviewData() {
         serviceName: d.domain_name,
         provider: d.provider,
         expirationDate: d.expiration_date,
-        // The final price to the client — base cost plus the discounted
-        // commission, same figure the Domains table/form show as "Final
-        // Price" — not the raw pass-through cost.
-        annualCost: d.annual_cost + applyDiscount(d.commission_usd, d.discount_percent),
+        // The final price to the client — base cost (incl. the 5% bank
+        // fee) plus the discounted commission, same figure the Domains
+        // table/form show as "Final Price" — not the raw pass-through cost.
+        annualCost: withBankFee(d.annual_cost) + applyDiscount(d.commission_usd, d.discount_percent),
         renewal: getRenewalInfo(d.expiration_date),
       })),
       ...hosting.hosting.map((h) => ({
@@ -168,13 +177,14 @@ export function useOverviewData() {
         serviceName: h.account_name,
         provider: h.provider,
         expirationDate: h.expiration_date,
-        // Final price to the client: Private = base cost + discounted
-        // commission. Shared = its own shared_annual_cost, discounted
-        // directly (no commission concept).
+        // Final price to the client: Private = base cost (incl. the 5%
+        // bank fee) + discounted commission. Shared = its own
+        // shared_annual_cost, discounted directly (no commission concept,
+        // no bank fee).
         annualCost:
           h.host_type === "shared"
             ? applyDiscount(h.shared_annual_cost, h.discount_percent)
-            : h.annual_cost + applyDiscount(h.commission_usd, h.discount_percent),
+            : withBankFee(h.annual_cost) + applyDiscount(h.commission_usd, h.discount_percent),
         renewal: getRenewalInfo(h.expiration_date),
       })),
       // Lifetime emails have no expiration_date and never renew, so they're
@@ -188,10 +198,10 @@ export function useOverviewData() {
           serviceName: e.email_account,
           provider: e.provider,
           expirationDate: e.expiration_date!,
-          // Final price to the client — base cost plus the discounted
-          // commission (recurring email only; Lifetime is filtered out
-          // above).
-          annualCost: e.annual_cost + applyDiscount(e.commission_usd, e.discount_percent),
+          // Final price to the client — base cost (incl. the 5% bank fee)
+          // plus the discounted commission (recurring email only; Lifetime
+          // is filtered out above).
+          annualCost: withBankFee(e.annual_cost) + applyDiscount(e.commission_usd, e.discount_percent),
           renewal: getRenewalInfo(e.expiration_date!),
         })),
       // Shared hosting plans aren't tied to a client, and have no
@@ -215,22 +225,31 @@ export function useOverviewData() {
   }, [domains.domains, hosting.hosting, emails.emails, sharedHostingHook.sharedHosting]);
 
   const financials = useMemo<FinancialStats>(() => {
-    const sum = (rows: { annual_cost: number }[]) =>
-      rows.reduce((acc, r) => acc + (r.annual_cost ?? 0), 0);
-    // A "Shared" hosting row's cost lives in shared_annual_cost instead of
-    // annual_cost (which is forced to 0 for that row — see HostingRow), and
-    // a Lifetime email's cost lives in lifetime_cost instead of annual_cost
-    // (also forced to 0) — each row only ever has one of the pair non-zero,
-    // so summing both fields together gives the row's true cost either way.
-    const hostingCost = (h: { annual_cost: number; shared_annual_cost: number }) =>
-      h.annual_cost + h.shared_annual_cost;
+    // Domains, Private hosting, and recurring email all pay the bank's
+    // card-payment fee on top of their own annual_cost (see withBankFee in
+    // utils/pricing.ts) — a real cost, so it belongs in these Secondary
+    // Expenses figures. A "Shared" hosting row's cost lives in
+    // shared_annual_cost instead of annual_cost (which is forced to 0 for
+    // that row — see HostingRow) and carries no such fee; withBankFee(0) is
+    // still 0, so this stays correct for shared rows without a branch. A
+    // Lifetime email's lifetime_cost carries no fee either — added raw.
     const emailCost = (e: { annual_cost: number; lifetime_cost: number }) =>
-      e.annual_cost + e.lifetime_cost;
+      withBankFee(e.annual_cost) + e.lifetime_cost;
 
-    const annualDomainCost = sum(domains.domains);
+    const annualDomainCost = domains.domains.reduce(
+      (acc, d) => acc + withBankFee(d.annual_cost ?? 0),
+      0
+    );
+    const hostingCost = (h: { annual_cost: number; shared_annual_cost: number }) =>
+      withBankFee(h.annual_cost) + h.shared_annual_cost;
     const annualHostingCost = hosting.hosting.reduce((acc, h) => acc + hostingCost(h), 0);
     const annualEmailCost = emails.emails.reduce((acc, e) => acc + emailCost(e), 0);
-    const annualSharedHostingCost = sum(sharedHostingHook.sharedHosting);
+    // A Shared Hosting plan's own annual_cost also pays the bank's 5% fee —
+    // it's a direct card payment to the host, same as domains/hosting/email.
+    const annualSharedHostingCost = sharedHostingHook.sharedHosting.reduce(
+      (acc, s) => acc + withBankFee(s.annual_cost ?? 0),
+      0
+    );
 
     // Same set + same 30-day cutoff as the "Upcoming Renewals" table —
     // "Upcoming Renewal Expenses (30d)" is the total of its Final Price
@@ -262,8 +281,25 @@ export function useOverviewData() {
 
     // Domain, Private hosting, and recurring email: the client pays
     // annual_cost + commission — annual_cost is a pass-through cost, the
-    // commission alone is our margin.
+    // commission alone is our margin. All three also pass through the
+    // bank's 5% card-payment fee on top of annual_cost (see withBankFee in
+    // utils/pricing.ts) — it's added into this same field before
+    // revenue/COGS are summed below, so it lands in both equally and never
+    // affects Gross/Net Profit: it's a real cost fully billed to the
+    // client, not company margin.
     type Commissioned = { annual_cost: number; commission_usd: number; discount_percent: number };
+    const domainsWithFee = domains.domains.map((d) => ({
+      ...d,
+      annual_cost: withBankFee(d.annual_cost),
+    }));
+    const privateHostingWithFee = privateHosting.map((h) => ({
+      ...h,
+      annual_cost: withBankFee(h.annual_cost),
+    }));
+    const recurringEmailsWithFee = recurringEmails.map((e) => ({
+      ...e,
+      annual_cost: withBankFee(e.annual_cost),
+    }));
     const grossUsd = (rows: Commissioned[]) =>
       rows.reduce((sum, r) => sum + r.annual_cost + r.commission_usd, 0);
     const netUsd = (rows: Commissioned[]) =>
@@ -275,17 +311,21 @@ export function useOverviewData() {
       rows.reduce((sum, r) => sum + r.annual_cost, 0);
 
     const directRevenueUsd =
-      grossUsd(domains.domains) + grossUsd(privateHosting) + grossUsd(recurringEmails);
+      grossUsd(domainsWithFee) + grossUsd(privateHostingWithFee) + grossUsd(recurringEmailsWithFee);
     const directNetRevenueUsd =
-      netUsd(domains.domains) + netUsd(privateHosting) + netUsd(recurringEmails);
+      netUsd(domainsWithFee) + netUsd(privateHostingWithFee) + netUsd(recurringEmailsWithFee);
     const directCogsUsd =
-      costUsd(domains.domains) + costUsd(privateHosting) + costUsd(recurringEmails);
+      costUsd(domainsWithFee) + costUsd(privateHostingWithFee) + costUsd(recurringEmailsWithFee);
 
     // Shared Hosting: no per-client commission — the margin is the spread
     // between what clients on a plan are charged (their own USD
-    // shared_annual_cost) and what the plan itself costs the company
-    // (shared_hosting.annual_cost), so COGS here is every plan's own cost
-    // rather than each client row's cost.
+    // shared_annual_cost, set independently by staff — not derived from
+    // the plan's own cost, so there's no formula to pass the fee through
+    // into it) and what the plan itself costs the company
+    // (shared_hosting.annual_cost, which — like domains/hosting/email —
+    // also pays the bank's 5% card fee). Unlike those other services, this
+    // fee isn't automatically recovered from clients here, so it genuinely
+    // shrinks this margin rather than netting out.
     const sharedRevenueUsd = sharedHostingAccounts.reduce(
       (sum, h) => sum + h.shared_annual_cost,
       0
@@ -295,15 +335,15 @@ export function useOverviewData() {
       0
     );
     const sharedCogsUsd = sharedHostingHook.sharedHosting.reduce(
-      (sum, s) => sum + s.annual_cost,
+      (sum, s) => sum + withBankFee(s.annual_cost),
       0
     );
 
     // Lifetime email: a one-time USD payment (its own lifetime_cost
-    // field), no commission or tracked cost basis of its own (unlike
-    // Shared Hosting, there's no separate "plan" entity to pull a cost
-    // from) — its full (discounted) value flows straight into revenue,
-    // with nothing offsetting it in COGS.
+    // field), no bank fee, no commission, and no tracked cost basis of its
+    // own (unlike Shared Hosting, there's no separate "plan" entity to
+    // pull a cost from) — its full (discounted) value flows straight into
+    // revenue, with nothing offsetting it in COGS.
     const lifetimeRevenueUsd = lifetimeEmails.reduce((sum, e) => sum + e.lifetime_cost, 0);
     const lifetimeNetRevenueUsd = lifetimeEmails.reduce(
       (sum, e) => sum + applyDiscount(e.lifetime_cost, e.discount_percent),
@@ -314,7 +354,8 @@ export function useOverviewData() {
     const netRevenueUsd = directNetRevenueUsd + sharedNetRevenueUsd + lifetimeNetRevenueUsd;
     const cogsUsd = directCogsUsd + sharedCogsUsd;
     const grossProfitUsd = netRevenueUsd - cogsUsd;
-    const netProfitUsd = grossProfitUsd * (1 - NET_PROFIT_DEDUCTION_PERCENT / 100);
+    // No further cut here — see the netProfitUsd doc comment above.
+    const netProfitUsd = grossProfitUsd;
 
     return { revenueUsd, netRevenueUsd, cogsUsd, grossProfitUsd, netProfitUsd };
   }, [domains.domains, hosting.hosting, emails.emails, sharedHostingHook.sharedHosting, egpRate]);

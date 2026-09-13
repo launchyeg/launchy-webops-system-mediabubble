@@ -34,7 +34,7 @@ import { deleteHosting, listHostingByClient } from "@/services/hosting.service";
 import { deleteEmail, listEmailsByClient } from "@/services/emails.service";
 import { getRenewalInfo, formatDate } from "@/utils/dates";
 import { formatCurrency } from "@/utils/format";
-import { applyDiscount } from "@/utils/pricing";
+import { applyDiscount, withBankFee } from "@/utils/pricing";
 import { cn } from "@/lib/utils";
 import type {
   ClientRow,
@@ -226,7 +226,7 @@ export default function ClientDetailsPage() {
                   title={d.domain_name}
                   subtitle={d.provider}
                   expirationDate={d.expiration_date}
-                  annualCost={d.annual_cost}
+                  annualCost={withBankFee(d.annual_cost)}
                   commissionUsd={applyDiscount(d.commission_usd, d.discount_percent)}
                   extra={
                     <>
@@ -263,7 +263,7 @@ export default function ClientDetailsPage() {
                   annualCost={
                     h.host_type === "shared"
                       ? applyDiscount(h.shared_annual_cost, h.discount_percent)
-                      : h.annual_cost
+                      : withBankFee(h.annual_cost)
                   }
                   commissionUsd={
                     h.host_type === "shared"
@@ -339,7 +339,7 @@ export default function ClientDetailsPage() {
                   annualCost={
                     e.is_lifetime
                       ? applyDiscount(e.lifetime_cost, e.discount_percent)
-                      : e.annual_cost
+                      : withBankFee(e.annual_cost)
                   }
                   commissionUsd={
                     e.is_lifetime ? 0 : applyDiscount(e.commission_usd, e.discount_percent)

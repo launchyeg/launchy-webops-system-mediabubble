@@ -15,7 +15,7 @@ import { EMAIL_PROVIDERS } from "@/utils/constants";
 import { useUsdToEgpRate } from "@/hooks/useUsdToEgpRate";
 import { useDomains } from "@/hooks/useDomains";
 import { formatCurrency, formatEgp } from "@/utils/format";
-import { applyDiscount } from "@/utils/pricing";
+import { applyDiscount, withBankFee } from "@/utils/pricing";
 import { cn } from "@/lib/utils";
 import type { ClientRow, EmailMailbox, EmailWithClient } from "@/types";
 
@@ -99,6 +99,17 @@ export function EmailFormModal({
   const totalEmailCostUsd = form.is_lifetime
     ? lifetimeCostUsd
     : annualCostUsd * mailboxCount;
+  // The bank charges its own card-payment fee on a recurring email's cost
+  // too — a real cost, not a markup — applied the same way as domains and
+  // Private hosting (see withBankFee in utils/pricing.ts). Not for a
+  // Lifetime email, though: it's a one-time purchase with no such fee.
+  // totalEmailCostUsd above keeps feeding the database exactly as typed
+  // (see the payload below); this fee-inclusive figure only drives what's
+  // shown/billed.
+  const totalEmailCostWithFeeUsd = form.is_lifetime
+    ? totalEmailCostUsd
+    : withBankFee(totalEmailCostUsd);
+  const bankFeeUsd = totalEmailCostWithFeeUsd - totalEmailCostUsd;
   const totalCommissionUsd = form.is_lifetime
     ? 0
     : perMailboxCommissionUsd * mailboxCount;
@@ -107,13 +118,14 @@ export function EmailFormModal({
     Math.max(0, Number(form.discount_percent) || 0),
   );
   // Recurring: discount comes off the commission only. Lifetime: no
-  // commission concept, so it comes off the annual cost directly instead.
+  // commission concept, so it comes off the annual cost directly instead
+  // (equal to totalEmailCostUsd here, since no bank fee applies to it).
   const netCommissionUsd = applyDiscount(totalCommissionUsd, discountPercent);
   const commissionDiscountUsd = totalCommissionUsd - netCommissionUsd;
   const netEmailCostUsd = form.is_lifetime
-    ? applyDiscount(totalEmailCostUsd, discountPercent)
-    : totalEmailCostUsd;
-  const emailCostDiscountUsd = totalEmailCostUsd - netEmailCostUsd;
+    ? applyDiscount(totalEmailCostWithFeeUsd, discountPercent)
+    : totalEmailCostWithFeeUsd;
+  const emailCostDiscountUsd = totalEmailCostWithFeeUsd - netEmailCostUsd;
   const finalPriceUsd = netEmailCostUsd + netCommissionUsd;
 
   const handleClientChange = (clientId: string) =>
@@ -250,9 +262,14 @@ export function EmailFormModal({
         account_email: form.account_email.trim() || null,
         // Recurring: annual_cost/commission_usd store totals (per-mailbox
         // rate × mailbox count) so dashboard sums reflect this service's
-        // true cost — the form fields hold the per-mailbox rate. 0 for a
-        // Lifetime email, which uses the separate lifetime_cost field
-        // instead (its own flat one-time amount, as typed).
+        // true cost — the form fields hold the per-mailbox rate, and this
+        // stores the raw, pre-bank-fee figure; the 5% fee is applied fresh
+        // wherever it's read (Final Price, Secondary Expenses, Financial
+        // Analytics — see withBankFee in utils/pricing.ts) rather than
+        // stored here, so re-saving this same email later never compounds
+        // the fee. 0 for a Lifetime email, which uses the separate
+        // lifetime_cost field instead (its own flat one-time amount, as
+        // typed, with no bank fee of its own).
         annual_cost: form.is_lifetime ? 0 : totalEmailCostUsd,
         commission_usd: totalCommissionUsd,
         lifetime_cost: form.is_lifetime ? totalEmailCostUsd : 0,
@@ -402,6 +419,7 @@ export function EmailFormModal({
               label="Expiration Date"
               type="date"
               required
+              hint="Drives this email's renewal status badge in Upcoming Renewals."
               value={form.expiration_date}
               onChange={(e) =>
                 setForm((f) => ({ ...f, expiration_date: e.target.value }))
@@ -413,7 +431,7 @@ export function EmailFormModal({
               min="0"
               step="0.01"
               required
-              hint="Per mailbox."
+              hint="Per mailbox — the 5% bank fee is added automatically."
               value={form.annual_cost}
               onChange={(e) =>
                 setForm((f) => ({ ...f, annual_cost: e.target.value }))
@@ -491,8 +509,11 @@ export function EmailFormModal({
             Final Price to Client
             {!form.is_lifetime && (
               <span className="ml-1 font-normal">
-                ({formatCurrency(annualCostUsd + perMailboxCommissionUsd)} ×{" "}
-                {mailboxCount} mailbox{mailboxCount === 1 ? "" : "es"})
+                (
+                {formatCurrency(
+                  withBankFee(annualCostUsd) + perMailboxCommissionUsd,
+                )}{" "}
+                × {mailboxCount} mailbox{mailboxCount === 1 ? "" : "es"})
               </span>
             )}
           </p>
@@ -511,10 +532,16 @@ export function EmailFormModal({
                 <dd>{formatEgp(totalEmailCostUsd * egpRate)}</dd>
               </div>
               {!form.is_lifetime && (
-                <div className="flex justify-between gap-2">
-                  <dt>Commission</dt>
-                  <dd>{formatEgp(totalCommissionUsd * egpRate)}</dd>
-                </div>
+                <>
+                  <div className="flex justify-between gap-2">
+                    <dt>Bank fee (5%)</dt>
+                    <dd>{formatEgp(bankFeeUsd * egpRate)}</dd>
+                  </div>
+                  <div className="flex justify-between gap-2">
+                    <dt>Commission</dt>
+                    <dd>{formatEgp(totalCommissionUsd * egpRate)}</dd>
+                  </div>
+                </>
               )}
               {discountPercent > 0 && (
                 <div className="flex justify-between gap-2 text-emerald-600 dark:text-emerald-400">

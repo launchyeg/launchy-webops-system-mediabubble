@@ -4,7 +4,7 @@ import { useDomains } from "./useDomains";
 import { useHosting } from "./useHosting";
 import { useEmails } from "./useEmails";
 import { getRenewalInfo } from "@/utils/dates";
-import { applyDiscount } from "@/utils/pricing";
+import { applyDiscount, withBankFee } from "@/utils/pricing";
 import type {
   ClientWithCounts,
   DomainWithClient,
@@ -34,8 +34,11 @@ export interface ClientOverviewGroup {
   serviceCount: number;
   /** Sum of every USD-priced service's final price (base + commission):
    * domains, Private hosting, Shared hosting (discounted annual_cost, no
-   * commission), and recurring (non-Lifetime) email. A Lifetime email's
-   * one-time cost is excluded — it's not a recurring annual cost. */
+   * commission), and recurring (non-Lifetime) email. Domains, Private
+   * hosting, and recurring email also include the bank's 5% card-payment
+   * fee on top of their base cost (see withBankFee in utils/pricing.ts). A
+   * Lifetime email's one-time cost is excluded — it's not a recurring
+   * annual cost. */
   totalAnnualCostUsd: number;
   worstTier: RenewalTier | null;
 }
@@ -93,11 +96,13 @@ export function useClientOverview() {
 
       g.totalAnnualCostUsd =
         g.domains.reduce(
-          (sum, d) => sum + d.annual_cost + applyDiscount(d.commission_usd, d.discount_percent),
+          (sum, d) =>
+            sum + withBankFee(d.annual_cost) + applyDiscount(d.commission_usd, d.discount_percent),
           0
         ) +
         privateHosting.reduce(
-          (sum, h) => sum + h.annual_cost + applyDiscount(h.commission_usd, h.discount_percent),
+          (sum, h) =>
+            sum + withBankFee(h.annual_cost) + applyDiscount(h.commission_usd, h.discount_percent),
           0
         ) +
         // Shared hosting has no commission concept — its own
@@ -107,7 +112,8 @@ export function useClientOverview() {
           0
         ) +
         recurringEmails.reduce(
-          (sum, e) => sum + e.annual_cost + applyDiscount(e.commission_usd, e.discount_percent),
+          (sum, e) =>
+            sum + withBankFee(e.annual_cost) + applyDiscount(e.commission_usd, e.discount_percent),
           0
         );
 

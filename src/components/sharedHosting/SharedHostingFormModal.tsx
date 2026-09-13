@@ -14,6 +14,7 @@ import { getRenewalInfo, renewalTierToServiceStatus } from "@/utils/dates";
 import { HOSTING_PROVIDERS } from "@/utils/constants";
 import { useUsdToEgpRate } from "@/hooks/useUsdToEgpRate";
 import { formatCurrency, formatEgp } from "@/utils/format";
+import { withBankFee } from "@/utils/pricing";
 import type { SharedHostingRow } from "@/types";
 
 interface SharedHostingFormModalProps {
@@ -46,6 +47,13 @@ export function SharedHostingFormModal({
   const { rate: egpRate } = useUsdToEgpRate();
 
   const annualCostUsd = Number(form.annual_cost) || 0;
+  // The bank charges its own card-payment fee on this plan's cost too — a
+  // real cost, not a markup — applied the same way as domains, Private
+  // hosting, and email (see withBankFee in utils/pricing.ts). annual_cost
+  // itself keeps storing the raw, pre-fee figure typed below — see the
+  // payload in handleSubmit.
+  const annualCostWithFeeUsd = withBankFee(annualCostUsd);
+  const bankFeeUsd = annualCostWithFeeUsd - annualCostUsd;
 
   useEffect(() => {
     if (!open) return;
@@ -75,6 +83,11 @@ export function SharedHostingFormModal({
         account_email: form.account_email.trim() || null,
         expiration_date: form.expiration_date,
         auto_renewal: form.auto_renewal,
+        // The raw, pre-bank-fee cost — exactly what was typed below. The
+        // 5% fee is applied fresh wherever annual_cost is read (Final
+        // Price, Secondary Expenses, Financial Analytics — see
+        // withBankFee in utils/pricing.ts) rather than stored here, so
+        // re-saving this same plan later never compounds the fee.
         annual_cost: annualCostUsd,
         notes: form.notes.trim() || null,
         status: renewalTierToServiceStatus(tier),
@@ -140,6 +153,7 @@ export function SharedHostingFormModal({
             label="Expiration Date"
             type="date"
             required
+            hint="Drives this plan's renewal status badge in Upcoming Renewals."
             value={form.expiration_date}
             onChange={(e) =>
               setForm((f) => ({ ...f, expiration_date: e.target.value }))
@@ -151,6 +165,7 @@ export function SharedHostingFormModal({
             min="0"
             step="0.01"
             required
+            hint="Host's price only — the 5% bank fee is added automatically."
             value={form.annual_cost}
             onChange={(e) =>
               setForm((f) => ({ ...f, annual_cost: e.target.value }))
@@ -160,13 +175,25 @@ export function SharedHostingFormModal({
         <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 dark:border-slate-800 dark:bg-slate-800/50">
           <p className="text-xs font-medium text-slate-400">Final Price</p>
           <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-            {formatCurrency(annualCostUsd)}
+            {formatCurrency(annualCostWithFeeUsd)}
             {egpRate !== null && (
               <span className="ml-1.5 font-normal text-slate-500 dark:text-slate-400">
-                (≈ {formatEgp(annualCostUsd * egpRate)})
+                (≈ {formatEgp(annualCostWithFeeUsd * egpRate)})
               </span>
             )}
           </p>
+          {egpRate !== null && (
+            <dl className="mt-1.5 space-y-0.5 border-t border-slate-200 pt-1.5 text-xs text-slate-500 dark:border-slate-700 dark:text-slate-400">
+              <div className="flex justify-between gap-2">
+                <dt>Hosting price</dt>
+                <dd>{formatEgp(annualCostUsd * egpRate)}</dd>
+              </div>
+              <div className="flex justify-between gap-2">
+                <dt>Bank fee (5%)</dt>
+                <dd>{formatEgp(bankFeeUsd * egpRate)}</dd>
+              </div>
+            </dl>
+          )}
         </div>
         <Switch
           id="shared-hosting-auto-renewal"

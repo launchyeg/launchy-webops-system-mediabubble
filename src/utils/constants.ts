@@ -35,7 +35,15 @@ export const EMAIL_PROVIDERS: EmailProvider[] = [
 
 export const RENEWAL_WINDOWS = [30, 21, 14, 7] as const;
 
-/** The percentage deducted from Gross Profit to arrive at Net Profit, on
- * the Overview page's "Financial Analytics" section. Change this single
- * number whenever the actual rate changes. */
-export const NET_PROFIT_DEDUCTION_PERCENT = 5;
+/** The bank's card-payment fee, charged whenever the company pays a
+ * registrar or hosting/email provider directly — a real cost on top of the
+ * listed price, not company markup. Folded into a domain's annual_cost, a
+ * Private hosting account's annual_cost, a Shared Hosting plan's own
+ * annual_cost, or a recurring email's annual_cost (see `withBankFee` in
+ * utils/pricing.ts) wherever Final Price, Secondary Expenses, or Financial
+ * Analytics figures are derived from it, so the client is billed for it
+ * and it counts as a genuine cost (COGS) rather than profit. Does not
+ * apply to a Lifetime email's lifetime_cost (a one-time purchase, no bank
+ * fee) or to Shared hosting's client-billed shared_annual_cost (paid
+ * differently — see withBankFee's own doc comment for why). */
+export const BANK_FEE_PERCENT = 5;

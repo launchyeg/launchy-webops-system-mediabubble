@@ -26,7 +26,7 @@ import { StatusBadge } from "@/components/shared/StatusBadge";
 import { useOverviewData } from "@/hooks/useOverviewData";
 import { formatCurrency, formatEgp } from "@/utils/format";
 import { getRenewalInfo, formatDate, daysRemainingLabel } from "@/utils/dates";
-import { NET_PROFIT_DEDUCTION_PERCENT } from "@/utils/constants";
+import { withBankFee } from "@/utils/pricing";
 import { cn } from "@/lib/utils";
 
 const KIND_ICON = {
@@ -253,10 +253,9 @@ export default function OverviewPage() {
                   tone={profitStats.netProfitUsd >= 0 ? "emerald" : "red"}
                   index={4}
                   subtext={
-                    `After ${NET_PROFIT_DEDUCTION_PERCENT}% deduction` +
-                    (egpRate !== null
-                      ? ` · ≈ ${formatCurrency(profitStats.netProfitUsd)}`
-                      : "")
+                    egpRate !== null
+                      ? `≈ ${formatCurrency(profitStats.netProfitUsd)}`
+                      : undefined
                   }
                 />
               </>
@@ -301,13 +300,6 @@ export default function OverviewPage() {
                     label="Total Discount"
                     valueUsd={
                       profitStats.revenueUsd - profitStats.netRevenueUsd
-                    }
-                    egpRate={egpRate}
-                  />
-                  <SidePanelStat
-                    label={`Total Taxes (${NET_PROFIT_DEDUCTION_PERCENT}%)`}
-                    valueUsd={
-                      profitStats.grossProfitUsd - profitStats.netProfitUsd
                     }
                     egpRate={egpRate}
                   />
@@ -606,7 +598,7 @@ export default function OverviewPage() {
                               {daysRemainingLabel(renewal.daysRemaining)}
                             </td>
                             <td className="px-5 py-3.5 text-slate-700 dark:text-slate-300">
-                              {formatCurrency(plan.annual_cost)}/yr
+                              {formatCurrency(withBankFee(plan.annual_cost))}/yr
                             </td>
                             <td className="px-5 py-3.5">
                               <StatusBadge renewal={renewal} />
@@ -648,10 +640,10 @@ export default function OverviewPage() {
                             </p>
                           </div>
                           <p className="font-medium text-slate-900 dark:text-slate-100">
-                            {formatCurrency(plan.annual_cost)}/yr
+                            {formatCurrency(withBankFee(plan.annual_cost))}/yr
                             {egpRate !== null && (
                               <span className="ml-1 text-xs font-normal text-slate-400">
-                                (≈ {formatEgp(plan.annual_cost * egpRate)})
+                                (≈ {formatEgp(withBankFee(plan.annual_cost) * egpRate)})
                               </span>
                             )}
                           </p>

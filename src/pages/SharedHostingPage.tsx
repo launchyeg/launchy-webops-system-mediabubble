@@ -16,6 +16,7 @@ import { deleteSharedHosting } from "@/services/sharedHosting.service";
 import { getRenewalInfo, formatDate, daysRemainingLabel } from "@/utils/dates";
 import { formatCurrency } from "@/utils/format";
 import { HOSTING_PROVIDERS } from "@/utils/constants";
+import { withBankFee } from "@/utils/pricing";
 import type { SharedHostingRow } from "@/types";
 
 export default function SharedHostingPage() {
@@ -149,7 +150,7 @@ export default function SharedHostingPage() {
     {
       key: "cost",
       header: "Final Price",
-      render: (h) => `${formatCurrency(h.annual_cost)}/yr`,
+      render: (h) => `${formatCurrency(withBankFee(h.annual_cost))}/yr`,
     },
     {
       key: "status",
@@ -267,7 +268,7 @@ export default function SharedHostingPage() {
                     </p>
                   </div>
                   <p className="font-medium text-slate-900 dark:text-slate-100">
-                    {formatCurrency(h.annual_cost)}/yr
+                    {formatCurrency(withBankFee(h.annual_cost))}/yr
                   </p>
                 </div>
                 <div className="mt-3 flex justify-end gap-1">
