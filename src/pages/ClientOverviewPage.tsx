@@ -29,7 +29,7 @@ import type { DomainWithClient, HostingWithClient, EmailWithClient } from "@/typ
 const UNASSIGNED_KEY = "__unassigned__";
 
 /** A price with its live-converted equivalent in the other currency, e.g.
- * "$420/yr" with "≈ £20,580/yr" underneath — `null` secondaryText just
+ * "$420/yr" with "≈ 20,580 EGP/yr" underneath — `null` secondaryText just
  * omits the second line (rate still loading or unavailable). */
 function DualPrice({
   primaryText,
