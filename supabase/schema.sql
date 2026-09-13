@@ -1,4 +1,4 @@
--- mediaBubble OPS — Supabase schema
+-- mediaBubble Web OPS — Supabase schema
 -- Run this in the Supabase SQL editor (or via `supabase db push`) on a
 -- fresh project. Safe to re-run: every statement is guarded.
 
@@ -407,14 +407,17 @@ create policy "Authenticated users can delete shared_hosting"
   on shared_hosting for delete using (auth.role() = 'authenticated');
 
 -- ============================================================================
--- Future automated renewal reminders
+-- Future client-facing renewal reminders
 --
--- This view is not used by the app today, but gives a ready-made surface
--- for a future scheduled job (Supabase Edge Function + pg_cron, or an
--- external scheduler) to query everything expiring within the 21/14/7-day
--- windows across all three service types, ready to notify clients over
--- WhatsApp/SMS/Email once that channel is built. `expiration_date` is
--- already included below for exactly that purpose.
+-- This view is not used by the app today. The admin-facing reminder emails
+-- below (supabase/functions/renewal-reminders) query domains/hosting/emails
+-- directly instead of this view — see that function's file header for why
+-- (it needs the client name and the right cost column for shared hosting,
+-- neither of which this view carries). This view is still a ready-made
+-- surface for a *client*-facing job to query everything expiring within the
+-- 30/21/14/7-day windows across all three service types, once notifying
+-- clients themselves (over WhatsApp/SMS/Email) is needed. `expiration_date`
+-- is already included below for exactly that purpose.
 --
 -- Note for whoever builds that notification: this view's `annual_cost` is
 -- the raw, pre-fee cost, same as the underlying domains/hosting/emails
@@ -462,3 +465,9 @@ create or replace view upcoming_renewals as
 -- which is Postgres/postgres and bypasses RLS by default for views in the
 -- public schema). Supabase flags a view without this as "Security Definer".
 alter view upcoming_renewals set (security_invoker = on);
+
+-- Admin-facing renewal reminder emails (supabase/functions/renewal-reminders)
+-- are scheduled through Supabase Studio's own Database → Cron Jobs UI
+-- instead of raw pg_cron/pg_net SQL here — it handles the Edge Function's
+-- authentication for you and needs no Vault secrets. See README.md
+-- ("Renewal reminder emails (Resend)") for the full setup.

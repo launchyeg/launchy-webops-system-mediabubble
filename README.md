@@ -1,4 +1,4 @@
-# mediaBubble OPS
+# mediaBubble Web OPS
 
 An internal Client & Service Management system for mediaBubble. Track clients,
 domains, hosting accounts, email accounts, renewal dates, annual costs, and
@@ -81,6 +81,8 @@ supabase/
   migrations/   One-off SQL to run by hand in the SQL Editor against an
                 already-deployed project (schema.sql alone only covers a
                 fresh install)
+  functions/    Scheduled Edge Functions (Deno) — currently just
+                renewal-reminders, which emails the admin via Resend
 ```
 
 ## Client Overview page
@@ -115,16 +117,66 @@ that date (see `src/utils/dates.ts`) — never hardcoded or manually set:
 | ≤ 7            | Urgent        | Strong/dark red      |
 | Expired        | Expired       | Dark, clearly marked |
 
+## 5. Renewal reminder emails (Resend)
+
+A scheduled Supabase Edge Function
+([`supabase/functions/renewal-reminders`](supabase/functions/renewal-reminders/index.ts))
+emails the admin via [Resend](https://resend.com) whenever a domain, hosting
+account, or recurring email account lands on exactly 30, 21, 14, or 7 days
+before its `expiration_date`. It queries `domains`/`hosting`/`emails`
+directly with the service_role key, so it sees every client's renewals
+regardless of RLS, and skips lifetime email accounts (no expiration date).
+
+1. Create a [Resend](https://resend.com) account and copy an API key. No
+   domain verification is required: sending from Resend's own pre-verified
+   `onboarding@resend.dev` address works with zero setup — the only catch
+   is Resend then only delivers to the exact email you signed up to Resend
+   with, so make sure `ADMIN_EMAIL` below matches that. (To notify a
+   different inbox, verify your own domain in Resend instead — never a
+   `*.vercel.app` address, you don't control DNS for that.)
+2. Install the [Supabase CLI](https://supabase.com/docs/guides/cli) and link
+   it to your project (`supabase link --project-ref <your-project-ref>`).
+3. Add `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, and **`ADMIN_EMAIL` — the
+   inbox that should receive every renewal warning** (yours, most likely)
+   to your `.env` (see `.env.example`), alongside the two `VITE_SUPABASE_*`
+   values. Vite ignores the three Resend ones (only `VITE_`-prefixed vars
+   reach the frontend bundle) — they're only read by the next command,
+   which deploys the function and pushes them to Supabase as its secrets:
+   ```bash
+   supabase functions deploy renewal-reminders
+   supabase secrets set --env-file .env
+   ```
+   (Changed a value later? Re-run just the `secrets set` line above.)
+4. Send yourself a test email immediately (no need to wait for a real
+   renewal date to line up) by POSTing to the deployed function with
+   `?test=true`, using your anon key as the bearer token:
+   ```bash
+   curl -X POST "https://<your-project-ref>.supabase.co/functions/v1/renewal-reminders?test=true" \
+     -H "Authorization: Bearer <your-anon-key>"
+   ```
+5. In the function's own **Settings** tab, turn **off** "Verify JWT with
+   legacy secret." The function doesn't use the caller's identity for
+   anything (it always acts as itself, via the service-role key), and
+   Supabase's own Cron Jobs feature below doesn't attach a JWT to its
+   calls — leaving this on means every scheduled run gets rejected with a
+   401 before your code even runs.
+6. Schedule it to run daily — no SQL or CLI needed: **Integrations → Cron
+   Jobs → Create a new cron job**. Set **Type** to **Supabase Edge
+   Function**, pick **renewal-reminders**, give it a name, and set
+   **Schedule** to a cron expression in GMT — e.g. `0 8 * * *` for 10:00 AM
+   Cairo time (Cairo is UTC+2 year-round, so subtract 2 hours from your
+   local time to get the GMT hour to enter).
+
 ## Extending later
 
 - **Admin-only / read-only roles:** a `profiles` table with a `role` column
   already exists and is populated automatically on signup. Tighten the RLS
   policies in `supabase/schema.sql` to check `profiles.role` once a second
   role is needed — no schema migration required.
-- **Automated renewal reminders (WhatsApp/SMS/Email):** the `upcoming_renewals`
-  SQL view in `supabase/schema.sql` already unions all three service types
-  with their expiration dates, ready for a scheduled Supabase Edge Function
-  or external cron job to query and notify clients.
+- **Renewal reminders to clients (WhatsApp/SMS/Email):** the admin-facing
+  reminder emails are covered above; the `upcoming_renewals` SQL view in
+  `supabase/schema.sql` still stands ready for a similar job that notifies
+  clients themselves once that channel is needed.
 - **Custom providers:** every provider field is stored as plain text.
   Choosing "Other" in any provider dropdown reveals a free-text field, so new
   registrars/hosts/email providers never require a code change.

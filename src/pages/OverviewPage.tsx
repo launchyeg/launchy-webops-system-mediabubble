@@ -266,13 +266,7 @@ export default function OverviewPage() {
             <Card className="mt-4 overflow-hidden p-0">
               <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto]">
                 <div className="p-5 sm:p-6">
-                  <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                    Profit Margins
-                  </p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Gross and net profit margin across every client service
-                  </p>
-                  <div className="mt-6 flex flex-col gap-6">
+                  <div className="flex flex-col gap-6">
                     <MarginBar
                       label="Gross Profit Margin"
                       percent={
@@ -643,7 +637,11 @@ export default function OverviewPage() {
                             {formatCurrency(withBankFee(plan.annual_cost))}/yr
                             {egpRate !== null && (
                               <span className="ml-1 text-xs font-normal text-slate-400">
-                                (≈ {formatEgp(withBankFee(plan.annual_cost) * egpRate)})
+                                (≈{" "}
+                                {formatEgp(
+                                  withBankFee(plan.annual_cost) * egpRate,
+                                )}
+                                )
                               </span>
                             )}
                           </p>

@@ -44,7 +44,7 @@ export default function LoginPage() {
             className="h-12 w-12 rounded-xl mb-4"
           />
           <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">
-            mediaBubble OPS
+            mediaBubble Web OPS
           </h1>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
             Sign in to manage clients &amp; software services

@@ -15,7 +15,7 @@ interface ThemeContextValue {
   setTheme: (theme: Theme) => void;
 }
 
-const STORAGE_KEY = "mediabubble-ops-theme";
+const STORAGE_KEY = "mediabubble-webops-theme";
 
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
 
@@ -48,7 +48,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const setTheme = useCallback((next: Theme) => setThemeState(next), []);
   const toggleTheme = useCallback(
     () => setThemeState((t) => (t === "dark" ? "light" : "dark")),
-    []
+    [],
   );
 
   return (
