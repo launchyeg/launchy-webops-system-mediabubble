@@ -20,7 +20,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
             mediaBubble
           </p>
           <p className="text-xs font-medium leading-tight text-slate-400">
-            Ops
+            Web OPS
           </p>
         </div>
       </div>
@@ -50,7 +50,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
               <item.icon className="h-[18px] w-[18px] shrink-0" />
               {item.label}
             </NavLink>
-          )
+          ),
         )}
       </nav>
 
