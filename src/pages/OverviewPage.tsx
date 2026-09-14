@@ -73,7 +73,10 @@ export default function OverviewPage() {
   // figure, and sorted so the biggest contributor (or, for the profit
   // cards, the biggest loss) is easiest to spot first.
   const profitStatsLineItems = profitStats?.lineItems ?? [];
-  const toBreakdownItem = (item: ProfitLineItem, amountUsd: number): BreakdownItem => ({
+  const toBreakdownItem = (
+    item: ProfitLineItem,
+    amountUsd: number,
+  ): BreakdownItem => ({
     id: item.id,
     serviceName: item.serviceName,
     clientName: item.clientName,
@@ -338,6 +341,7 @@ export default function OverviewPage() {
                     }
                     egpRate={egpRate}
                   />
+                  <ExchangeRateStat egpRate={egpRate} />
                 </div>
               </div>
             </Card>
@@ -755,6 +759,24 @@ function MarginBar({ label, percent }: { label: string; percent: number }) {
           style={{ width: `${clamped}%` }}
         />
       </div>
+    </div>
+  );
+}
+
+/** The live USD→EGP rate this whole page converts every USD figure with
+ * (see useUsdToEgpRate) — shown here so the conversion itself is visible
+ * and auditable, not just implied by the EGP figures it produces. Sits
+ * above Total Discount in the Profit Margins card's side panel. */
+function ExchangeRateStat({ egpRate }: { egpRate: number | null }) {
+  return (
+    <div>
+      <p className="text-xs font-medium text-slate-400">Exchange Rate</p>
+      <p className="mt-1 text-xl font-bold text-slate-900 dark:text-slate-100">
+        {egpRate !== null ? `$1 = ${egpRate.toFixed(2)} EGP` : "—"}
+      </p>
+      {egpRate === null && (
+        <p className="text-xs text-slate-400">Unavailable right now</p>
+      )}
     </div>
   );
 }
