@@ -74,6 +74,30 @@ export interface ProfitStats {
    * final price — see withBankFee in utils/pricing.ts — rather than
    * approximated as a blanket cut here.) */
   netProfitUsd: number;
+  /** Every individual service that feeds into the five figures above, so
+   * each one can be audited line by line (Overview page's per-card
+   * breakdown panels) instead of only seeing the aggregate totals. A
+   * Shared Hosting plan's own row has no clientName (it isn't tied to one
+   * client) and only ever contributes to cogsUsd; the "shared" hosting
+   * rows billed to a specific client only ever contribute to revenue. */
+  lineItems: ProfitLineItem[];
+}
+
+export interface ProfitLineItem {
+  id: string;
+  serviceName: string;
+  clientName: string | null;
+  kind: "domain" | "hosting" | "email" | "shared_hosting";
+  /** This item's contribution to Total Revenue. */
+  revenueUsd: number;
+  /** This item's contribution to Net Revenue. */
+  netRevenueUsd: number;
+  /** This item's contribution to COGS. */
+  cogsUsd: number;
+  /** netRevenueUsd - cogsUsd — this item's contribution to both Gross and
+   * Net Profit (identical for the same reason netProfitUsd equals
+   * grossProfitUsd above). */
+  marginUsd: number;
 }
 
 export function useOverviewData() {
@@ -357,7 +381,96 @@ export function useOverviewData() {
     // No further cut here — see the netProfitUsd doc comment above.
     const netProfitUsd = grossProfitUsd;
 
-    return { revenueUsd, netRevenueUsd, cogsUsd, grossProfitUsd, netProfitUsd };
+    // One line item per row feeding the five totals above, for the
+    // Overview page's per-card breakdown panels — same formulas as the
+    // aggregates above, just kept per-service instead of summed.
+    const lineItems: ProfitLineItem[] = [
+      ...domainsWithFee.map((d): ProfitLineItem => {
+        const netRevenueItemUsd = d.annual_cost + applyDiscount(d.commission_usd, d.discount_percent);
+        return {
+          id: `domain-${d.id}`,
+          serviceName: d.domain_name,
+          clientName: d.client_name ?? "Unassigned",
+          kind: "domain",
+          revenueUsd: d.annual_cost + d.commission_usd,
+          netRevenueUsd: netRevenueItemUsd,
+          cogsUsd: d.annual_cost,
+          marginUsd: netRevenueItemUsd - d.annual_cost,
+        };
+      }),
+      ...privateHostingWithFee.map((h): ProfitLineItem => {
+        const netRevenueItemUsd = h.annual_cost + applyDiscount(h.commission_usd, h.discount_percent);
+        return {
+          id: `hosting-${h.id}`,
+          serviceName: h.account_name,
+          clientName: h.client_name ?? "Unassigned",
+          kind: "hosting",
+          revenueUsd: h.annual_cost + h.commission_usd,
+          netRevenueUsd: netRevenueItemUsd,
+          cogsUsd: h.annual_cost,
+          marginUsd: netRevenueItemUsd - h.annual_cost,
+        };
+      }),
+      ...recurringEmailsWithFee.map((e): ProfitLineItem => {
+        const netRevenueItemUsd = e.annual_cost + applyDiscount(e.commission_usd, e.discount_percent);
+        return {
+          id: `email-${e.id}`,
+          serviceName: e.email_account,
+          clientName: e.client_name ?? "Unassigned",
+          kind: "email",
+          revenueUsd: e.annual_cost + e.commission_usd,
+          netRevenueUsd: netRevenueItemUsd,
+          cogsUsd: e.annual_cost,
+          marginUsd: netRevenueItemUsd - e.annual_cost,
+        };
+      }),
+      // A client's Shared hosting subscription: revenue only, no cost of
+      // its own — the matching cost lives on the plan itself, below.
+      ...sharedHostingAccounts.map((h): ProfitLineItem => {
+        const netRevenueItemUsd = applyDiscount(h.shared_annual_cost, h.discount_percent);
+        return {
+          id: `shared-account-${h.id}`,
+          serviceName: h.account_name,
+          clientName: h.client_name ?? "Unassigned",
+          kind: "hosting",
+          revenueUsd: h.shared_annual_cost,
+          netRevenueUsd: netRevenueItemUsd,
+          cogsUsd: 0,
+          marginUsd: netRevenueItemUsd,
+        };
+      }),
+      // A Shared Hosting plan itself: cost only, no client of its own — see
+      // sharedCogsUsd's doc comment above for why an unused/under-linked
+      // plan shows up here as a pure loss.
+      ...sharedHostingHook.sharedHosting.map((s): ProfitLineItem => {
+        const cogsItemUsd = withBankFee(s.annual_cost);
+        return {
+          id: `shared-plan-${s.id}`,
+          serviceName: s.name,
+          clientName: null,
+          kind: "shared_hosting",
+          revenueUsd: 0,
+          netRevenueUsd: 0,
+          cogsUsd: cogsItemUsd,
+          marginUsd: -cogsItemUsd,
+        };
+      }),
+      ...lifetimeEmails.map((e): ProfitLineItem => {
+        const netRevenueItemUsd = applyDiscount(e.lifetime_cost, e.discount_percent);
+        return {
+          id: `email-lifetime-${e.id}`,
+          serviceName: e.email_account,
+          clientName: e.client_name ?? "Unassigned",
+          kind: "email",
+          revenueUsd: e.lifetime_cost,
+          netRevenueUsd: netRevenueItemUsd,
+          cogsUsd: 0,
+          marginUsd: netRevenueItemUsd,
+        };
+      }),
+    ];
+
+    return { revenueUsd, netRevenueUsd, cogsUsd, grossProfitUsd, netProfitUsd, lineItems };
   }, [domains.domains, hosting.hosting, emails.emails, sharedHostingHook.sharedHosting, egpRate]);
 
   // For each shared hosting plan, which clients currently have a

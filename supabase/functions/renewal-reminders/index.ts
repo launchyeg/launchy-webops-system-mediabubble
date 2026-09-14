@@ -21,6 +21,13 @@
 // applyDiscount(shared_annual_cost, discount_percent) instead, with no bank
 // fee. See src/utils/pricing.ts for the full rationale.
 //
+// Final Price is shown EGP-primary with the USD amount underneath, same
+// convention as the rest of the app (see formatEgp/formatCurrency in
+// src/utils/format.ts and the live rate in src/hooks/useUsdToEgpRate.ts) —
+// this function fetches the same public exchangerate-api.com rate itself
+// rather than sharing that hook's in-browser cache. If that fetch fails,
+// the email falls back to USD-only, same as the app does.
+//
 // It queries `domains` / `hosting` / `emails` directly rather than the
 // `upcoming_renewals` view in supabase/schema.sql: the view has no client
 // name (only client_id) and, for a "shared" hosting row, reads `annual_cost`
@@ -52,7 +59,10 @@ const BANK_FEE_PERCENT = 5;
 
 /** Mirrors applyDiscount in src/utils/pricing.ts: applies a percentage
  * discount to a commission (or a Shared host's own cost) only. */
-function applyDiscount(amount: number, discountPercent: number | null | undefined): number {
+function applyDiscount(
+  amount: number,
+  discountPercent: number | null | undefined,
+): number {
   const pct = discountPercent ?? 0;
   return amount * (1 - pct / 100);
 }
@@ -90,13 +100,19 @@ Deno.serve(async (req) => {
     const fromEmail = Deno.env.get("RESEND_FROM_EMAIL");
     const adminEmail = Deno.env.get("ADMIN_EMAIL");
 
-    if (!supabaseUrl || !serviceRoleKey || !resendApiKey || !fromEmail || !adminEmail) {
+    if (
+      !supabaseUrl ||
+      !serviceRoleKey ||
+      !resendApiKey ||
+      !fromEmail ||
+      !adminEmail
+    ) {
       return json(
         {
           error:
             "Missing one or more required secrets (RESEND_API_KEY, RESEND_FROM_EMAIL, ADMIN_EMAIL). Set them with `supabase secrets set`.",
         },
-        500
+        500,
       );
     }
 
@@ -108,18 +124,36 @@ Deno.serve(async (req) => {
     const horizonDays = Math.max(...RENEWAL_WINDOWS);
     const horizon = addDays(today, horizonDays);
 
-    const rows = await fetchUpcomingRenewals(supabase, today, isoDate(today), isoDate(horizon));
+    const rows = await fetchUpcomingRenewals(
+      supabase,
+      today,
+      isoDate(today),
+      isoDate(horizon),
+    );
     const due = rows.filter((row) =>
-      (RENEWAL_WINDOWS as readonly number[]).includes(row.daysRemaining)
+      (RENEWAL_WINDOWS as readonly number[]).includes(row.daysRemaining),
     );
 
     const isTest = new URL(req.url).searchParams.get("test") === "true";
     if (due.length === 0 && !isTest) {
-      return json({ sent: false, reason: "No services due today", checked: rows.length });
+      return json({
+        sent: false,
+        reason: "No services due today",
+        checked: rows.length,
+      });
     }
 
+    // Only fetched once we know an email is actually going out — no point
+    // hitting the rate API on the (much more common) days there's nothing
+    // due.
+    const egpRate = await fetchEgpRate();
+
     const rowsForEmail = due.length > 0 ? due : [sampleRow()];
-    const { subject, html } = buildEmail(rowsForEmail, due.length === 0);
+    const { subject, html } = buildEmail(
+      rowsForEmail,
+      due.length === 0,
+      egpRate,
+    );
 
     const resendRes = await fetch("https://api.resend.com/emails", {
       method: "POST",
@@ -137,12 +171,25 @@ Deno.serve(async (req) => {
 
     if (!resendRes.ok) {
       const detail = await resendRes.text();
-      return json({ sent: false, error: `Resend API error (${resendRes.status}): ${detail}` }, 502);
+      return json(
+        {
+          sent: false,
+          error: `Resend API error (${resendRes.status}): ${detail}`,
+        },
+        502,
+      );
     }
 
-    return json({ sent: true, count: due.length, test: due.length === 0 && isTest });
+    return json({
+      sent: true,
+      count: due.length,
+      test: due.length === 0 && isTest,
+    });
   } catch (err) {
-    return json({ error: String(err instanceof Error ? err.message : err) }, 500);
+    return json(
+      { error: String(err instanceof Error ? err.message : err) },
+      500,
+    );
   }
 });
 
@@ -153,8 +200,52 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
+/** Mirrors useUsdToEgpRate in src/hooks/useUsdToEgpRate.ts: the same public,
+ * keyless exchangerate-api.com endpoint, computing EGP-per-USD from its
+ * EGP-based rates. Returns null on any failure (network error, bad
+ * response) — callers should fall back to USD-only in that case, same as
+ * the app does. */
+async function fetchEgpRate(): Promise<number | null> {
+  try {
+    const res = await fetch("https://api.exchangerate-api.com/v4/latest/EGP");
+    if (!res.ok) return null;
+    const data = await res.json();
+    const egpPerUsd = 1 / data.rates.USD; // API is EGP-based: rates.USD = USD per 1 EGP
+    return Number.isFinite(egpPerUsd) ? egpPerUsd : null;
+  } catch {
+    return null;
+  }
+}
+
+// Mirrors formatCurrency/formatEgp in src/utils/format.ts.
+const usdFormatter = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  maximumFractionDigits: 0,
+});
+const preciseUsdFormatter = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  maximumFractionDigits: 2,
+});
+const egpNumberFormatter = new Intl.NumberFormat("en-US", {
+  maximumFractionDigits: 0,
+});
+
+function formatUsd(value: number): string {
+  return Number.isInteger(value)
+    ? usdFormatter.format(value)
+    : preciseUsdFormatter.format(value);
+}
+
+function formatEgp(value: number): string {
+  return `${egpNumberFormatter.format(value)} EGP`;
+}
+
 function utcMidnight(date: Date): Date {
-  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  return new Date(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()),
+  );
 }
 
 function addDays(date: Date, days: number): Date {
@@ -179,27 +270,27 @@ async function fetchUpcomingRenewals(
   supabase: any,
   today: Date,
   fromDate: string,
-  toDate: string
+  toDate: string,
 ): Promise<RenewalRow[]> {
   const [domains, hosting, emails] = await Promise.all([
     supabase
       .from("domains")
       .select(
-        "domain_name, provider, expiration_date, annual_cost, commission_usd, discount_percent, clients(client_name, phone)"
+        "domain_name, provider, expiration_date, annual_cost, commission_usd, discount_percent, clients(client_name, phone)",
       )
       .gte("expiration_date", fromDate)
       .lte("expiration_date", toDate),
     supabase
       .from("hosting")
       .select(
-        "account_name, provider, expiration_date, annual_cost, commission_usd, shared_annual_cost, host_type, discount_percent, clients(client_name, phone)"
+        "account_name, provider, expiration_date, annual_cost, commission_usd, shared_annual_cost, host_type, discount_percent, clients(client_name, phone)",
       )
       .gte("expiration_date", fromDate)
       .lte("expiration_date", toDate),
     supabase
       .from("emails")
       .select(
-        "email_account, provider, expiration_date, annual_cost, commission_usd, discount_percent, clients(client_name, phone)"
+        "email_account, provider, expiration_date, annual_cost, commission_usd, discount_percent, clients(client_name, phone)",
       )
       .eq("is_lifetime", false) // lifetime emails have no expiration_date to check
       .gte("expiration_date", fromDate)
@@ -299,7 +390,11 @@ function windowStyle(days: number): { bg: string; text: string } {
   return { bg: "#fef3c7", text: "#92400e" };
 }
 
-function buildEmail(rows: RenewalRow[], isFallbackSample: boolean): { subject: string; html: string } {
+function buildEmail(
+  rows: RenewalRow[],
+  isFallbackSample: boolean,
+  egpRate: number | null,
+): { subject: string; html: string } {
   const byWindow = new Map<number, RenewalRow[]>();
   for (const row of rows) {
     const bucket = byWindow.get(row.daysRemaining) ?? [];
@@ -308,7 +403,9 @@ function buildEmail(rows: RenewalRow[], isFallbackSample: boolean): { subject: s
   }
   const windows = [...byWindow.keys()].sort((a, b) => a - b);
 
-  const subjectParts = windows.map((w) => `${byWindow.get(w)!.length} due in ${w}d`);
+  const subjectParts = windows.map(
+    (w) => `${byWindow.get(w)!.length} due in ${w}d`,
+  );
   const subject = isFallbackSample
     ? "mediaBubble Web OPS — Test renewal reminder"
     : `mediaBubble Web OPS — Renewal reminder: ${subjectParts.join(", ")}`;
@@ -332,9 +429,13 @@ function buildEmail(rows: RenewalRow[], isFallbackSample: boolean): { subject: s
               ${escapeHtml(row.expirationDate)}
             </td>
             <td style="padding:10px 12px;border-bottom:1px solid #eee;font-size:14px;color:#333;text-align:right;white-space:nowrap;">
-              $${row.finalPrice.toFixed(2)}
+              ${
+                egpRate !== null
+                  ? `${escapeHtml(formatEgp(row.finalPrice * egpRate))}<br/><span style="color:#666;font-size:12px;">${escapeHtml(formatUsd(row.finalPrice))}</span>`
+                  : escapeHtml(formatUsd(row.finalPrice))
+              }
             </td>
-          </tr>`
+          </tr>`,
         )
         .join("");
 

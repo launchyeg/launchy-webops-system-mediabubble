@@ -15,6 +15,10 @@ import {
 import { PageTransition } from "@/components/shared/PageTransition";
 import { StatCard } from "@/components/overview/StatCard";
 import {
+  FinancialBreakdownCard,
+  type BreakdownItem,
+} from "@/components/overview/FinancialBreakdownCard";
+import {
   Card,
   CardHeader,
   CardTitle,
@@ -23,7 +27,7 @@ import {
 import { StatCardSkeleton, TableSkeleton } from "@/components/ui/Skeleton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { StatusBadge } from "@/components/shared/StatusBadge";
-import { useOverviewData } from "@/hooks/useOverviewData";
+import { useOverviewData, type ProfitLineItem } from "@/hooks/useOverviewData";
 import { formatCurrency, formatEgp } from "@/utils/format";
 import { getRenewalInfo, formatDate, daysRemainingLabel } from "@/utils/dates";
 import { withBankFee } from "@/utils/pricing";
@@ -63,6 +67,38 @@ export default function OverviewPage() {
   // "Services Requiring Renewal (30d)" above — the table below shows
   // exactly the services that make up those two figures.
   const dueSoon = upcomingRenewals.filter((r) => r.renewal.daysRemaining <= 30);
+
+  // Per-card breakdown lists for the Financial Analytics section — each
+  // filtered to only the services that actually contribute to that card's
+  // figure, and sorted so the biggest contributor (or, for the profit
+  // cards, the biggest loss) is easiest to spot first.
+  const profitStatsLineItems = profitStats?.lineItems ?? [];
+  const toBreakdownItem = (item: ProfitLineItem, amountUsd: number): BreakdownItem => ({
+    id: item.id,
+    serviceName: item.serviceName,
+    clientName: item.clientName,
+    kind: item.kind,
+    amountUsd,
+  });
+  const revenueItems = profitStatsLineItems
+    .filter((item) => item.revenueUsd !== 0)
+    .map((item) => toBreakdownItem(item, item.revenueUsd))
+    .sort((a, b) => b.amountUsd - a.amountUsd);
+  const netRevenueItems = profitStatsLineItems
+    .filter((item) => item.revenueUsd !== 0)
+    .map((item) => toBreakdownItem(item, item.netRevenueUsd))
+    .sort((a, b) => b.amountUsd - a.amountUsd);
+  const cogsItems = profitStatsLineItems
+    .filter((item) => item.cogsUsd !== 0)
+    .map((item) => toBreakdownItem(item, item.cogsUsd))
+    .sort((a, b) => b.amountUsd - a.amountUsd);
+  // Gross Profit and Net Profit are always equal here (see ProfitStats'
+  // own doc comment), so both cards share this same list — sorted
+  // ascending, worst (most negative) contributor first, since that's the
+  // one most worth investigating.
+  const marginItems = profitStatsLineItems
+    .map((item) => toBreakdownItem(item, item.marginUsd))
+    .sort((a, b) => a.amountUsd - b.amountUsd);
 
   return (
     <PageTransition>
@@ -181,7 +217,7 @@ export default function OverviewPage() {
               ))
             ) : (
               <>
-                <StatCard
+                <FinancialBreakdownCard
                   label="Total Revenue"
                   value={
                     egpRate !== null
@@ -195,8 +231,9 @@ export default function OverviewPage() {
                       ? `≈ ${formatCurrency(profitStats.revenueUsd)}`
                       : undefined
                   }
+                  items={revenueItems}
                 />
-                <StatCard
+                <FinancialBreakdownCard
                   label="Net Revenue"
                   value={
                     egpRate !== null
@@ -210,8 +247,9 @@ export default function OverviewPage() {
                       ? `≈ ${formatCurrency(profitStats.netRevenueUsd)}`
                       : undefined
                   }
+                  items={netRevenueItems}
                 />
-                <StatCard
+                <FinancialBreakdownCard
                   label="COGS"
                   value={
                     egpRate !== null
@@ -225,8 +263,9 @@ export default function OverviewPage() {
                       ? `≈ ${formatCurrency(profitStats.cogsUsd)}`
                       : undefined
                   }
+                  items={cogsItems}
                 />
-                <StatCard
+                <FinancialBreakdownCard
                   label="Gross Profit"
                   value={
                     egpRate !== null
@@ -241,8 +280,9 @@ export default function OverviewPage() {
                       ? `≈ ${formatCurrency(profitStats.grossProfitUsd)}`
                       : undefined
                   }
+                  items={marginItems}
                 />
-                <StatCard
+                <FinancialBreakdownCard
                   label="Net Profit"
                   value={
                     egpRate !== null
@@ -257,6 +297,7 @@ export default function OverviewPage() {
                       ? `≈ ${formatCurrency(profitStats.netProfitUsd)}`
                       : undefined
                   }
+                  items={marginItems}
                 />
               </>
             )}
