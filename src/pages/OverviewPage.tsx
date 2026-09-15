@@ -63,6 +63,13 @@ export default function OverviewPage() {
   } = useOverviewData();
   const navigate = useNavigate();
 
+  // EGP-primary, "≈ $USD" secondary display for the Secondary Expenses
+  // stat cards, matching the Financial Analytics cards' treatment.
+  const egpValue = (usd: number) =>
+    egpRate !== null ? formatEgp(usd * egpRate) : formatCurrency(usd);
+  const egpSubtext = (usd: number) =>
+    egpRate !== null ? `≈ ${formatCurrency(usd)}` : undefined;
+
   // Same 30-day cutoff as "Upcoming Renewal Expenses (30d)" /
   // "Services Requiring Renewal (30d)" above — the table below shows
   // exactly the services that make up those two figures.
@@ -363,31 +370,36 @@ export default function OverviewPage() {
               <>
                 <StatCard
                   label="Annual Domain Cost"
-                  value={formatCurrency(financials.annualDomainCost)}
+                  value={egpValue(financials.annualDomainCost)}
+                  subtext={egpSubtext(financials.annualDomainCost)}
                   icon={Globe}
                   index={0}
                 />
                 <StatCard
                   label="Annual Hosting Cost"
-                  value={formatCurrency(financials.annualHostingCost)}
+                  value={egpValue(financials.annualHostingCost)}
+                  subtext={egpSubtext(financials.annualHostingCost)}
                   icon={Server}
                   index={1}
                 />
                 <StatCard
                   label="Annual Email Cost"
-                  value={formatCurrency(financials.annualEmailCost)}
+                  value={egpValue(financials.annualEmailCost)}
+                  subtext={egpSubtext(financials.annualEmailCost)}
                   icon={Mail}
                   index={2}
                 />
                 <StatCard
                   label="Annual Shared Hosting Cost"
-                  value={formatCurrency(financials.annualSharedHostingCost)}
+                  value={egpValue(financials.annualSharedHostingCost)}
+                  subtext={egpSubtext(financials.annualSharedHostingCost)}
                   icon={Share2}
                   index={3}
                 />
                 <StatCard
                   label="Total Annual Cost"
-                  value={formatCurrency(financials.totalAnnualCost)}
+                  value={egpValue(financials.totalAnnualCost)}
+                  subtext={egpSubtext(financials.totalAnnualCost)}
                   icon={Wallet}
                   tone="emerald"
                   index={4}
@@ -405,7 +417,8 @@ export default function OverviewPage() {
               <>
                 <StatCard
                   label="Upcoming Renewal Expenses (30d)"
-                  value={formatCurrency(financials.upcomingRenewalExpense)}
+                  value={egpValue(financials.upcomingRenewalExpense)}
+                  subtext={egpSubtext(financials.upcomingRenewalExpense)}
                   icon={DollarSign}
                   tone="amber"
                   index={0}
